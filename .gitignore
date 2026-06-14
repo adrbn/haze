@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Xcode / build
+build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Generated artifacts
+*.metallib
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
+
+# Release output
+dist/
+*.saver.zip
+*.app.zip

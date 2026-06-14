@@ -1,0 +1,117 @@
+name: Sleepi
+
+options:
+  bundleIdPrefix: co.sleepi
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  xcodeVersion: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Local builds sign ad-hoc with no dev team; flip these for distribution.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "YES"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    ALWAYS_SEARCH_USER_PATHS: "NO"
+    CLANG_ENABLE_OBJC_ARC: "YES"
+
+targets:
+  SleepiKit:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/SleepiKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.SleepiKit
+        PRODUCT_NAME: SleepiKit
+        DEFINES_MODULE: "YES"
+        GENERATE_INFOPLIST_FILE: "YES"
+        SKIP_INSTALL: "YES"
+        MARKETING_VERSION: "0.1.0"
+        DYLIB_INSTALL_NAME_BASE: "@rpath"
+
+  Sleepi:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Sleepi
+    dependencies:
+      - target: SleepiKit
+        embed: true
+        codeSign: true
+      - target: SleepiSaver
+        link: false
+        copy:
+          destination: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.app
+        PRODUCT_NAME: Sleepi
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_LSUIElement: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: Sleepi
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Sleepi contributors — GPL-3.0"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        COMBINE_HIDPI_IMAGES: "YES"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  SleepiSaver:
+    type: bundle
+    platform: macOS
+    sources:
+      - path: Sources/SleepiSaver
+    dependencies:
+      - target: SleepiKit
+        embed: true
+        codeSign: true
+      - sdk: ScreenSaver.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.saver
+        PRODUCT_NAME: SleepiSaver
+        PRODUCT_MODULE_NAME: SleepiSaver
+        WRAPPER_EXTENSION: saver
+        SKIP_INSTALL: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: Sources/SleepiSaver/Info.plist
+        ENABLE_HARDENED_RUNTIME: "YES"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks"
+
+  SleepiKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/SleepiKitTests
+    dependencies:
+      - target: SleepiKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.SleepiKitTests
+        GENERATE_INFOPLIST_FILE: "YES"
+
+schemes:
+  Sleepi:
+    build:
+      targets:
+        Sleepi: all
+        SleepiSaver: all
+        SleepiKitTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - SleepiKitTests
