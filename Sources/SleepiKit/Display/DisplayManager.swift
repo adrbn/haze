@@ -1,8 +1,10 @@
 import AppKit
 
 /// Owns one `WallpaperWindow` + renderer per screen and keeps them in sync with
-/// display configuration changes. Reports aggregate occlusion so the power
-/// policy can pause rendering when the desktop is fully covered.
+/// display configuration changes. Occlusion (whether the desktop is covered) is
+/// detected separately by `OcclusionDetector`, because `NSWindow.occlusionState`
+/// is unreliable for desktop-level windows.
+@MainActor
 public final class DisplayManager {
     private struct ScreenEntry {
         let window: WallpaperWindow
@@ -13,17 +15,13 @@ public final class DisplayManager {
     private var currentItem: ContentItem?
     private var fpsCap: Int = 0
     private var rendering = true
-
-    /// Called (on main) with `true` when every wallpaper window is occluded.
-    public var onOcclusionChange: ((Bool) -> Void)?
+    private var lastScreenConfig: [CGRect] = []
+    private var pendingRebuild: DispatchWorkItem?
 
     public init() {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(occlusionChanged),
-            name: NSWindow.didChangeOcclusionStateNotification, object: nil)
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -37,11 +35,11 @@ public final class DisplayManager {
         rebuild()
     }
 
+    /// Update the FPS cap in place — no teardown, so video keeps playing.
     public func setFPSCap(_ cap: Int) {
         guard fpsCap != cap else { return }
         fpsCap = cap
-        // Re-create gradient renderers (others ignore the cap) cheaply by rebuild.
-        rebuild()
+        for entry in entries { entry.renderer.setFPSCap(cap) }
     }
 
     /// Pause/resume all renderers without tearing down the windows.
@@ -52,7 +50,10 @@ public final class DisplayManager {
         Log.display.debug("rendering set to \(on, privacy: .public)")
     }
 
-    public func clear() { teardown() }
+    public func clear() {
+        teardown()
+        currentItem = nil
+    }
 
     // MARK: Internals
 
@@ -66,7 +67,6 @@ public final class DisplayManager {
             }
             let window = WallpaperWindow(screen: screen)
             let contentView = renderer.view
-            contentView.frame = window.frame
             contentView.autoresizingMask = [.width, .height]
             window.contentView = contentView
             window.orderFrontRegardless()
@@ -74,6 +74,7 @@ public final class DisplayManager {
             if !rendering { renderer.pause() }
             entries.append(ScreenEntry(window: window, renderer: renderer))
         }
+        lastScreenConfig = NSScreen.screens.map(\.frame)
         Log.display.info("Applied '\(item.name, privacy: .public)' to \(self.entries.count, privacy: .public) screen(s)")
     }
 
@@ -86,15 +87,20 @@ public final class DisplayManager {
         entries.removeAll()
     }
 
+    /// Display config changes fire for many reasons (resolution, refresh rate,
+    /// Night Shift, arrangement). Debounce, and only rebuild if screen geometry
+    /// actually changed — otherwise the wallpaper would needlessly restart.
     @objc private func screenParametersChanged() {
-        Log.display.info("Screen parameters changed — rebuilding windows")
-        rebuild()
-    }
-
-    @objc private func occlusionChanged(_ note: Notification) {
-        guard let changed = note.object as? NSWindow,
-              entries.contains(where: { $0.window === changed }) else { return }
-        let allOccluded = !entries.isEmpty && entries.allSatisfy { !$0.window.occlusionState.contains(.visible) }
-        onOcclusionChange?(allOccluded)
+        pendingRebuild?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let now = NSScreen.screens.map(\.frame)
+            if now != self.lastScreenConfig {
+                Log.display.info("Screen geometry changed — rebuilding windows")
+                self.rebuild()
+            }
+        }
+        pendingRebuild = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 }

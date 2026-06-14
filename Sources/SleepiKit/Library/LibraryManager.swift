@@ -56,10 +56,11 @@ public final class LibraryManager {
         save()
     }
 
-    /// Import a media file: copy it into the Media directory, build a thumbnail,
-    /// and append a `ContentItem`. The original is left untouched.
-    @discardableResult
-    public func importMedia(from sourceURL: URL, name: String? = nil) throws -> ContentItem {
+    /// Filesystem-only import work: copy the file into the Media directory and
+    /// build a thumbnail, returning a ready `ContentItem`. Performs **no**
+    /// manifest mutation, so it is safe to call off the main thread; commit the
+    /// result with `add(_:)` on the owning thread.
+    public static func prepareImport(from sourceURL: URL, name: String? = nil) throws -> ContentItem {
         let ext = sourceURL.pathExtension.lowercased()
         guard ContentType.importableExtensions.contains(ext) else {
             throw LibraryError.unsupportedType(ext.isEmpty ? "(none)" : ext)
@@ -87,13 +88,19 @@ public final class LibraryManager {
             }
         }
 
-        let item = ContentItem(
+        return ContentItem(
             id: id,
             type: type,
             name: name ?? sourceURL.deletingPathExtension().lastPathComponent,
             relativePath: relPath,
             thumbnailPath: thumbnailPath)
-        return add(item)
+    }
+
+    /// Convenience: prepare + commit in one call (used by tests and synchronous
+    /// callers). The original file is left untouched.
+    @discardableResult
+    public func importMedia(from sourceURL: URL, name: String? = nil) throws -> ContentItem {
+        add(try Self.prepareImport(from: sourceURL, name: name))
     }
 
     @discardableResult

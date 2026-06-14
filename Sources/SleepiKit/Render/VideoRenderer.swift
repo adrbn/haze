@@ -29,6 +29,7 @@ final class PlayerHostView: NSView {
 public final class VideoRenderer: NSObject, WallpaperRenderer {
     private let hostView: PlayerHostView
     private let player: AVQueuePlayer
+    private let asset: AVURLAsset
     private var looper: AVPlayerLooper?
 
     public var view: NSView { hostView }
@@ -39,19 +40,27 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
             return nil
         }
         let asset = AVURLAsset(url: url)
-        let template = AVPlayerItem(asset: asset)
         let queue = AVQueuePlayer()
         queue.isMuted = true
         queue.volume = 0
         queue.actionAtItemEnd = .none
         queue.automaticallyWaitsToMinimizeStalling = false
+        self.asset = asset
         self.player = queue
         self.hostView = PlayerHostView(player: queue, gravity: scaling.videoGravity)
         super.init()
-        self.looper = AVPlayerLooper(player: queue, templateItem: template)
+        primeLooperIfNeeded()
     }
 
-    public func start() { player.play() }
+    private func primeLooperIfNeeded() {
+        guard looper == nil else { return }
+        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(asset: asset))
+    }
+
+    public func start() {
+        primeLooperIfNeeded()   // tolerate start() after a prior stop()
+        player.play()
+    }
     public func pause() { player.pause() }
     public func resume() { player.play() }
     public func stop() {

@@ -12,6 +12,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     private let commandQueue: MTLCommandQueue
     private var pipeline: MTLRenderPipelineState?
     private var colorBuffer: MTLBuffer?
+    private var resolvedColorCount: Int32 = 2
     private var config: GradientConfig
     private var fpsCap: Int
     private var startTime: CFTimeInterval = 0
@@ -66,6 +67,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
 
     private func updateColors() {
         let colors = config.resolvedColors
+        resolvedColorCount = Int32(colors.count)
         colorBuffer = device.makeBuffer(bytes: colors,
                                         length: MemoryLayout<SIMD4<Float>>.stride * colors.count,
                                         options: .storageModeShared)
@@ -119,7 +121,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             grain: Float(config.grain),
             warp: Float(config.warp),
             brightness: Float(config.brightness),
-            colorCount: Int32(min(config.resolvedColors.count, 6)),
+            colorCount: resolvedColorCount,
             style: Int32(config.style.shaderIndex))
 
         encoder.setRenderPipelineState(pipeline)

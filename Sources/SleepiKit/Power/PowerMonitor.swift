@@ -4,6 +4,7 @@ import IOKit.ps
 /// Watches system power/sleep/lock state and the desktop window occlusion, feeds
 /// a `PlaybackPolicy`, and notifies an observer whenever the render decision
 /// flips. Lives on the main run loop.
+@MainActor
 public final class PowerMonitor {
     public private(set) var policy: PlaybackPolicy
     /// Called (on main) whenever `shouldRender` changes.
@@ -11,6 +12,7 @@ public final class PowerMonitor {
 
     private var lastShouldRender: Bool
     private var powerSource: CFRunLoopSource?
+    private var powerStateToken: NSObjectProtocol?
 
     public init(settings: AppSettings) {
         var initial = PlaybackPolicy()
@@ -26,6 +28,9 @@ public final class PowerMonitor {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)
+        if let powerStateToken {
+            NotificationCenter.default.removeObserver(powerStateToken)
+        }
         if let powerSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSource, .defaultMode)
         }
@@ -66,7 +71,13 @@ public final class PowerMonitor {
         dnc.addObserver(self, selector: #selector(screenLocked), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
         dnc.addObserver(self, selector: #selector(screenUnlocked), name: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil)
 
-        NotificationCenter.default.addObserver(self, selector: #selector(powerStateChanged), name: Notification.Name.NSProcessInfoPowerStateDidChange, object: nil)
+        // NSProcessInfoPowerStateDidChange may be delivered off the main thread,
+        // so request main-queue delivery (the handler mutates AppKit/Metal views).
+        powerStateToken = NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.refreshPowerState()
+            self?.emit()
+        }
 
         subscribePowerSource()
     }
@@ -94,7 +105,6 @@ public final class PowerMonitor {
     @objc private func screensDidWake() { policy.displayAsleep = false; emit() }
     @objc private func screenLocked() { policy.screenLocked = true; emit() }
     @objc private func screenUnlocked() { policy.screenLocked = false; emit() }
-    @objc private func powerStateChanged() { refreshPowerState(); emit() }
 
     private func refreshPowerState() {
         policy.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled

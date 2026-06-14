@@ -13,6 +13,13 @@ public protocol WallpaperRenderer: AnyObject {
     func pause()
     func resume()
     func stop()
+    /// Apply a new global FPS cap in place (0 = follow display). Default: no-op
+    /// — only renderers whose rate is configurable (gradients) need to react.
+    func setFPSCap(_ cap: Int)
+}
+
+public extension WallpaperRenderer {
+    func setFPSCap(_ cap: Int) {}
 }
 
 extension Scaling {

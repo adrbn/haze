@@ -33,13 +33,22 @@ public final class StaticImageRenderer: NSObject, WallpaperRenderer {
     public var view: NSView { imageView }
 
     public init?(url: URL, scaling: Scaling) {
-        guard let nsImage = NSImage(contentsOf: url),
-              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            Log.render.error("Failed to load image: \(url.lastPathComponent, privacy: .public)")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            Log.render.error("Image file missing: \(url.lastPathComponent, privacy: .public)")
             return nil
         }
         super.init()
-        imageView.set(cgImage, scaling: scaling)
+        // Decode off the main thread, then apply on main.
+        DispatchQueue.global(qos: .userInitiated).async { [weak imageView] in
+            guard let nsImage = NSImage(contentsOf: url),
+                  let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                Log.render.error("Failed to decode image: \(url.lastPathComponent, privacy: .public)")
+                return
+            }
+            DispatchQueue.main.async {
+                imageView?.set(cgImage, scaling: scaling)
+            }
+        }
     }
 
     public func start() {}

@@ -25,9 +25,8 @@ final class SleepiSaverView: ScreenSaverView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
 
-        let item = SleepiKit.screensaverItem()
-        let cap = SleepiKit.globalFPSCap()
-        guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: cap) else {
+        let content = SleepiKit.screensaverContent()
+        guard let renderer = RendererFactory.makeRenderer(for: content.item, fpsCap: content.fpsCap) else {
             Log.saver.error("No renderer for screensaver item")
             return
         }

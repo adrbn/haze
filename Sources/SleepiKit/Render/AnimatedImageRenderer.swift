@@ -2,10 +2,13 @@ import AppKit
 import ImageIO
 
 /// Plays GIF / APNG via a discrete `CAKeyframeAnimation` over the decoded
-/// frames. Lighter than a per-frame timer and respects each frame's delay.
+/// frames. Frames are decoded on a background queue (capped) and applied on the
+/// main thread, so importing/applying a large animation never blocks the UI.
 final class AnimatedImageView: NSView {
     private let imageLayer = CALayer()
     private var animation: CAKeyframeAnimation?
+    private var playing = false
+    private static let maxFrames = 300
 
     override init(frame frameRect: NSRect) { super.init(frame: frameRect); commonInit() }
     required init?(coder: NSCoder) { super.init(coder: coder); commonInit() }
@@ -19,48 +22,63 @@ final class AnimatedImageView: NSView {
         root.addSublayer(imageLayer)
     }
 
+    /// Validates the source synchronously (cheap) and kicks off background decode.
     func load(url: URL, scaling: Scaling) -> Bool {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return false }
-        let count = CGImageSourceGetCount(source)
-        guard count > 0 else { return false }
-
-        var frames: [CGImage] = []
-        var delays: [Double] = []
-        for i in 0..<count {
-            guard let frame = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
-            frames.append(frame)
-            delays.append(Self.frameDelay(source, i))
-        }
-        guard !frames.isEmpty else { return false }
-
-        let total = max(delays.reduce(0, +), 0.05)
-        var keyTimes: [NSNumber] = []
-        var acc = 0.0
-        for d in delays {
-            keyTimes.append(NSNumber(value: acc / total))
-            acc += d
-        }
-
-        imageLayer.contents = frames.first
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              CGImageSourceGetCount(source) > 0 else { return false }
         imageLayer.contentsGravity = scaling.contentsGravity
 
-        let anim = CAKeyframeAnimation(keyPath: "contents")
-        anim.values = frames
-        anim.keyTimes = keyTimes
-        anim.duration = total
-        anim.calculationMode = .discrete
-        anim.repeatCount = .infinity
-        anim.isRemovedOnCompletion = false
-        animation = anim
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let count = min(CGImageSourceGetCount(source), Self.maxFrames)
+            var frames: [CGImage] = []
+            var delays: [Double] = []
+            for i in 0..<count {
+                guard let frame = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
+                frames.append(frame)
+                delays.append(Self.frameDelay(source, i))
+            }
+            guard !frames.isEmpty else { return }
+
+            let total = max(delays.reduce(0, +), 0.05)
+            var keyTimes: [NSNumber] = []
+            var acc = 0.0
+            for d in delays {
+                keyTimes.append(NSNumber(value: acc / total))
+                acc += d
+            }
+
+            let anim = CAKeyframeAnimation(keyPath: "contents")
+            anim.values = frames
+            anim.keyTimes = keyTimes
+            anim.duration = total
+            anim.calculationMode = .discrete
+            anim.repeatCount = .infinity
+            anim.isRemovedOnCompletion = false
+
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.imageLayer.contents = frames.first
+                self.animation = anim
+                if self.playing { self.applyAnimation() }
+            }
+        }
         return true
     }
 
     func play() {
+        playing = true
+        applyAnimation()
+    }
+
+    func stopPlaying() {
+        playing = false
+        imageLayer.removeAnimation(forKey: "frames")
+    }
+
+    private func applyAnimation() {
         guard let animation, imageLayer.animation(forKey: "frames") == nil else { return }
         imageLayer.add(animation, forKey: "frames")
     }
-
-    func stopPlaying() { imageLayer.removeAnimation(forKey: "frames") }
 
     override func layout() {
         super.layout()

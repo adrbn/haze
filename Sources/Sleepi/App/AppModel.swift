@@ -69,14 +69,22 @@ final class AppModel: ObservableObject {
     }
 
     func importFiles(_ urls: [URL]) {
-        var failures: [String] = []
-        for url in urls {
-            do { _ = try library.importMedia(from: url) }
-            catch { failures.append(url.lastPathComponent) }
-        }
-        refresh()
-        if !failures.isEmpty {
-            Log.app.error("Failed to import: \(failures.joined(separator: ", "), privacy: .public)")
+        // Heavy work (copy + thumbnail decode) runs off the main thread; the
+        // manifest mutation is committed back on the main actor.
+        Task.detached(priority: .userInitiated) {
+            var prepared: [ContentItem] = []
+            var failures: [String] = []
+            for url in urls {
+                do { prepared.append(try LibraryManager.prepareImport(from: url)) }
+                catch { failures.append(url.lastPathComponent) }
+            }
+            await MainActor.run {
+                for item in prepared { self.library.add(item) }
+                self.refresh()
+                if !failures.isEmpty {
+                    Log.app.error("Failed to import: \(failures.joined(separator: ", "), privacy: .public)")
+                }
+            }
         }
     }
 

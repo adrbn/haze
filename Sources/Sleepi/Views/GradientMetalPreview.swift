@@ -30,6 +30,11 @@ struct GradientMetalPreview: NSViewRepresentable {
         context.coordinator.renderer?.update(config: config)
     }
 
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.renderer?.stop()
+        coordinator.renderer = nil
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {

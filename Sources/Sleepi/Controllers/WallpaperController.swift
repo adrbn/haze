@@ -1,12 +1,13 @@
 import AppKit
 import SleepiKit
 
-/// Wires the desktop `DisplayManager` to the `PowerMonitor` so wallpapers pause
-/// automatically when occluded / asleep / on battery, and exposes a small API
-/// for the app model to drive.
+/// Wires the desktop `DisplayManager` to the `PowerMonitor` + `OcclusionDetector`
+/// so wallpapers pause automatically when occluded / asleep / on battery, and
+/// exposes a small API for the app model to drive.
 @MainActor
 final class WallpaperController {
     private let display = DisplayManager()
+    private let occlusion = OcclusionDetector()
     private var power: PowerMonitor?
 
     func configure(settings: AppSettings) {
@@ -14,15 +15,20 @@ final class WallpaperController {
         monitor.onShouldRenderChange = { [weak self] shouldRender in
             self?.display.setRendering(shouldRender)
         }
-        display.onOcclusionChange = { [weak monitor] occluded in
+        power = monitor
+
+        occlusion.onChange = { [weak monitor] occluded in
             monitor?.setOccluded(occluded)
         }
-        power = monitor
+        occlusion.start()
+        monitor.setOccluded(occlusion.currentlyOccluded)
+
         display.setRendering(monitor.policy.shouldRender)
     }
 
     func apply(item: ContentItem, settings: AppSettings) {
         display.apply(item: item, fpsCap: settings.globalFPSCap)
+        occlusion.evaluate()
     }
 
     func updateSettings(_ settings: AppSettings) {

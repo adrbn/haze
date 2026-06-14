@@ -2,20 +2,24 @@ import SwiftUI
 import AppKit
 import SleepiKit
 
-/// Small in-memory cache so grid scrolling doesn't re-decode thumbnails.
+/// Small in-memory cache so grid scrolling doesn't re-decode thumbnails. Only
+/// memory lookups happen synchronously; disk reads are done off the main thread
+/// by the view.
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
     private let cache = NSCache<NSString, NSImage>()
 
-    func image(for url: URL) -> NSImage? {
-        let key = url.path as NSString
-        if let cached = cache.object(forKey: key) { return cached }
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        cache.setObject(image, forKey: key)
-        return image
+    func cached(_ url: URL) -> NSImage? {
+        cache.object(forKey: url.path as NSString)
     }
 
-    func invalidate(_ url: URL) { cache.removeObject(forKey: url.path as NSString) }
+    func store(_ image: NSImage, for url: URL) {
+        cache.setObject(image, forKey: url.path as NSString)
+    }
+
+    func invalidate(_ url: URL) {
+        cache.removeObject(forKey: url.path as NSString)
+    }
 }
 
 extension ContentType {
@@ -40,19 +44,21 @@ extension ContentType {
 
 struct ContentThumbnailView: View {
     let item: ContentItem
+    @State private var image: NSImage?
 
     var body: some View {
         ZStack {
             Color.black
             content
         }
+        .task(id: item.id) { await loadIfNeeded() }
     }
 
     @ViewBuilder
     private var content: some View {
         if item.type == .gradient, let gradient = item.gradient {
             GradientSwatch(config: gradient)
-        } else if let url = item.thumbnailURL, let image = ThumbnailCache.shared.image(for: url) {
+        } else if let image {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -61,5 +67,18 @@ struct ContentThumbnailView: View {
                 .font(.system(size: 30, weight: .medium))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func loadIfNeeded() async {
+        guard item.type != .gradient, let url = item.thumbnailURL else { return }
+        if let cached = ThumbnailCache.shared.cached(url) {
+            image = cached
+            return
+        }
+        image = nil
+        let loaded = await Task.detached(priority: .utility) { NSImage(contentsOf: url) }.value
+        guard let loaded else { return }
+        ThumbnailCache.shared.store(loaded, for: url)
+        image = loaded
     }
 }
