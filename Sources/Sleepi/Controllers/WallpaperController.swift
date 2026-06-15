@@ -45,6 +45,11 @@ final class WallpaperController {
         power?.setUserPaused(paused)
     }
 
+    /// Re-raise the live wallpaper windows above the system desktop picture —
+    /// needed right after we change the macOS desktop image, which macOS layers
+    /// on top of our desktop-level windows.
+    func reassert() { display.reassertWindows() }
+
     var isUserPaused: Bool { power?.isUserPaused ?? false }
 
     func clear() { display.clear() }

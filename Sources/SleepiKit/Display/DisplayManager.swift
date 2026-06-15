@@ -96,6 +96,7 @@ public final class DisplayManager {
         for entry in entries {
             entry.window.level = level
             entry.window.orderFrontRegardless()
+            if rendering { entry.renderer.redraw() }   // refresh in case it went stale/black
         }
     }
 

@@ -96,7 +96,16 @@ final class AppModel: ObservableObject {
             settings = captured
             persist()
         }
-        SystemWallpaper.apply(for: item)
+        SystemWallpaper.apply(for: item) { [weak self] in self?.reassertWallpaperWindows() }
+    }
+
+    /// macOS layers its desktop picture above our desktop-level windows when it
+    /// changes, so re-raise ours immediately and again after it settles.
+    private func reassertWallpaperWindows() {
+        wallpaper.reassert()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.wallpaper.reassert()
+        }
     }
 
     // MARK: Speed control (sidebar slider)
@@ -249,7 +258,9 @@ final class AppModel: ObservableObject {
             if newSettings.matchSystemWallpaper {
                 syncSystemWallpaper()
             } else {
-                SystemWallpaper.restore(savedPath: newSettings.savedSystemWallpaperPath)
+                SystemWallpaper.restore(savedPath: newSettings.savedSystemWallpaperPath) { [weak self] in
+                    self?.reassertWallpaperWindows()
+                }
             }
         }
     }
