@@ -33,10 +33,20 @@ struct ScreensaverSettingsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack {
+                Button {
+                    ScreensaverPreviewController.shared.start()
+                } label: {
+                    Label("Preview Full Screen", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
                 Button(installed ? "Reinstall / Update" : "Install Screensaver") { install() }
-                    .buttonStyle(.borderedProminent)
                 Button("Open Screen Saver Settings") { ScreensaverInstaller.openSystemSettings() }
             }
+            Text("Preview runs the screensaver full-screen right now — move the mouse or press a key to exit.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             if let statusMessage {
                 Text(statusMessage).font(.caption).foregroundStyle(.secondary)
             }
