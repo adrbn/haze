@@ -87,8 +87,12 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
-        CVDisplayLinkSetOutputHandler(link) { [weak self] _, _, _, _, _ in
-            DispatchQueue.main.async { self?.present() }
+        CVDisplayLinkSetOutputHandler(link) { [weak self] _, _, inOutputTime, _, _ in
+            // Map the *upcoming vsync* to an item time and present it on this
+            // thread — no hop to main, so frame selection stays synced to the
+            // display (clean 2:2 cadence for 30fps on a 60Hz panel).
+            guard let self else { return kCVReturnSuccess }
+            self.present(forItemTime: self.output.itemTime(for: inOutputTime.pointee))
             return kCVReturnSuccess
         }
         CVDisplayLinkStart(link)
@@ -100,9 +104,10 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         displayLink = nil
     }
 
-    /// Copy the current decoded frame into the layer if a new one is ready.
-    private func present() {
-        let time = output.itemTime(forHostTime: CACurrentMediaTime())
+    /// Copy the decoded frame for `time` into the layer if a new one is ready.
+    /// Safe off-main (Core Animation accepts an explicit transaction from any
+    /// thread); the layer is only mutated here once playing.
+    private func present(forItemTime time: CMTime) {
         guard output.hasNewPixelBuffer(forItemTime: time),
               let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil)
         else { return }
@@ -112,6 +117,11 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         CATransaction.commit()
     }
 
+    /// Present whatever frame matches "now" — used by start()/tick()/redraw().
+    private func presentCurrent() {
+        present(forItemTime: output.itemTime(forHostTime: CACurrentMediaTime()))
+    }
+
     // MARK: WallpaperRenderer
 
     public func start() {
@@ -119,7 +129,7 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         attachOutputToCurrentItem()
         player.rate = playbackRate   // rate > 0 begins playback
         startDisplayLink()
-        present()
+        presentCurrent()
     }
 
     public func pause() {
@@ -141,8 +151,8 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
     }
 
     /// Screensaver-host fallback (its view's display link may not fire).
-    public func tick() { present() }
-    public func redraw() { present() }
+    public func tick() { presentCurrent() }
+    public func redraw() { presentCurrent() }
 
     public func liveUpdate(_ item: ContentItem) {
         playbackRate = VideoRenderer.clampRate(item.settings.speed)
