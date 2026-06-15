@@ -18,7 +18,8 @@ struct GradientsView: View {
         }
     }
 
-    private var gradients: [ContentItem] { model.items.filter { $0.type.isGradient } }
+    private var shaders: [ContentItem] { model.items.filter { $0.type == .shaderGradient } }
+    private var classics: [ContentItem] { model.items.filter { $0.type == .gradient } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,28 +37,55 @@ struct GradientsView: View {
             }
 
             ScrollView {
-                LazyVGrid(columns: libraryGridColumns, spacing: 18) {
-                    ForEach(gradients) { item in
-                        ContentCard(item: item,
-                                    isSelected: model.settings.wallpaperItemID == item.id) {
-                            model.setWallpaper(item)
-                        }
-                        .contextMenu {
-                            Button("Set as Wallpaper") { model.setWallpaper(item) }
-                            Button("Use as Screensaver") { model.setScreensaver(item) }
-                            Button("Edit…") { editing = .existing(item) }
-                            Button("Duplicate") { duplicate(item) }
-                            Divider()
-                            Button("Delete", role: .destructive) { model.deleteItem(item) }
-                        }
+                VStack(alignment: .leading, spacing: 10) {
+                    if !shaders.isEmpty {
+                        sectionHeader("3D ShaderGradient",
+                                      "Fluid, lit 3D surfaces — shadergradient.co style")
+                        grid(shaders, tag: "3D")
+                    }
+                    if !classics.isEmpty {
+                        sectionHeader("Classic 2D",
+                                      "Flat animated colour fields — lighter on the GPU")
+                        grid(classics, tag: "2D")
                     }
                 }
-                .padding(24)
+                .padding(.vertical, 8)
             }
         }
         .sheet(item: $editing) { target in
             editor(for: target).environmentObject(model)
         }
+    }
+
+    private func sectionHeader(_ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.title3.weight(.semibold))
+            Text(subtitle).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+    }
+
+    private func grid(_ items: [ContentItem], tag: String) -> some View {
+        LazyVGrid(columns: libraryGridColumns, spacing: 18) {
+            ForEach(items) { item in
+                ContentCard(item: item,
+                            isSelected: model.settings.wallpaperItemID == item.id,
+                            tag: tag) {
+                    model.setWallpaper(item)
+                }
+                .contextMenu {
+                    Button("Set as Wallpaper") { model.setWallpaper(item) }
+                    Button("Use as Screensaver") { model.setScreensaver(item) }
+                    Button("Edit…") { editing = .existing(item) }
+                    Button("Duplicate") { duplicate(item) }
+                    Divider()
+                    Button("Delete", role: .destructive) { model.deleteItem(item) }
+                }
+            }
+        }
+        .padding(.horizontal, 24)
     }
 
     @ViewBuilder

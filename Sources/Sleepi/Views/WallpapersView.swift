@@ -6,8 +6,8 @@ import SleepiKit
 struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
 
-    /// Imported media only — gradients live in their own tab.
-    private var media: [ContentItem] { model.items.filter { $0.type != .gradient } }
+    /// Imported media only — both 2D and 3D gradients live in their own tab.
+    private var media: [ContentItem] { model.items.filter { !$0.type.isGradient } }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -37,6 +37,7 @@ extension PageHeader where Trailing == EmptyView {
 struct ContentCard: View {
     let item: ContentItem
     let isSelected: Bool
+    var tag: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -47,6 +48,17 @@ struct ContentCard: View {
                     .frame(height: 132)
                     .glassCard(cornerRadius: 16, selected: isSelected)
                     .overlay(alignment: .topLeading) { badge }
+                    .overlay(alignment: .topTrailing) {
+                        if let tag {
+                            Text(tag)
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(.black.opacity(0.5), in: Capsule())
+                                .padding(8)
+                        }
+                    }
                     .overlay(alignment: .bottomTrailing) {
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
