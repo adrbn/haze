@@ -21,6 +21,10 @@ public struct AppSettings: Codable, Sendable, Equatable {
 
     public var launchAtLogin: Bool
 
+    /// IDs of bundled gradient presets already added to the library, so new
+    /// presets get seeded once on update and deleted ones don't reappear.
+    public var seededGradientPresetIDs: [String]
+
     public init(version: Int = AppSettings.currentVersion,
                 wallpaperItemID: UUID? = nil,
                 screensaverItemID: UUID? = nil,
@@ -29,7 +33,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 pauseOnBattery: Bool = false,
                 pauseInLowPowerMode: Bool = true,
                 globalFPSCap: Int = 0,
-                launchAtLogin: Bool = false) {
+                launchAtLogin: Bool = false,
+                seededGradientPresetIDs: [String] = []) {
         self.version = version
         self.wallpaperItemID = wallpaperItemID
         self.screensaverItemID = screensaverItemID
@@ -39,6 +44,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.pauseInLowPowerMode = pauseInLowPowerMode
         self.globalFPSCap = globalFPSCap
         self.launchAtLogin = launchAtLogin
+        self.seededGradientPresetIDs = seededGradientPresetIDs
     }
 
     public static let `default` = AppSettings()
@@ -56,5 +62,6 @@ public struct AppSettings: Codable, Sendable, Equatable {
         pauseInLowPowerMode = try c.decodeIfPresent(Bool.self, forKey: .pauseInLowPowerMode) ?? d.pauseInLowPowerMode
         globalFPSCap = try c.decodeIfPresent(Int.self, forKey: .globalFPSCap) ?? d.globalFPSCap
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
+        seededGradientPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededGradientPresetIDs) ?? d.seededGradientPresetIDs
     }
 }

@@ -9,10 +9,14 @@ struct MainWindowView: View {
         NavigationSplitView {
             List(AppTab.allCases, selection: $tab) { item in
                 Label(item.title, systemImage: item.systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.vertical, 7)
                     .tag(item)
             }
-            .navigationSplitViewColumnWidth(min: 196, ideal: 216, max: 260)
-            .safeAreaInset(edge: .top, spacing: 0) { brand }
+            .navigationSplitViewColumnWidth(min: 210, ideal: 232, max: 280)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: 26)   // clear the traffic-light area
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { playbackControls }
         } detail: {
             detail
@@ -20,7 +24,7 @@ struct MainWindowView: View {
                 .background(WindowBackground())
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 880, minHeight: 580)
+        .frame(minWidth: 900, minHeight: 620)
         .preferredColorScheme(.dark)   // UI is designed dark; keep text contrast correct in Light Mode
     }
 
@@ -28,24 +32,9 @@ struct MainWindowView: View {
     private var detail: some View {
         switch tab ?? .wallpapers {
         case .wallpapers: WallpapersView()
-        case .gradients: GradientsView()
         case .screensaver: ScreensaverSettingsView()
         case .settings: SettingsView()
         }
-    }
-
-    private var brand: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "moon.stars.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.tint)
-            Text("Sleepi")
-                .font(.system(size: 19, weight: .bold, design: .rounded))
-            Spacer()
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 18)
-        .padding(.bottom, 8)
     }
 
     private var playbackControls: some View {

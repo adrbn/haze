@@ -22,10 +22,29 @@ final class AppModel: ObservableObject {
     private init() {
         settings = JSONStore.load(AppSettings.self, from: ContentStore.settingsURL) ?? .default
         library.seedDefaultsIfNeeded()
-        library.seedShaderGradientsIfNeeded()
+        seedShaderPresets()
         items = library.items
         settings.launchAtLogin = LaunchAtLogin.isEnabled
         syncCurrentSpeed()
+    }
+
+    /// Add bundled Fluid (3D) presets not yet in the library, tracking seeded IDs
+    /// so new presets appear on update without duplicating or resurrecting deleted ones.
+    private func seedShaderPresets() {
+        var seeded = Set(settings.seededGradientPresetIDs)
+        if seeded.isEmpty {
+            let existing = Set(library.items.filter { $0.type == .shaderGradient }.map(\.name))
+            for preset in ShaderGradientPresets.all where existing.contains(preset.name) {
+                seeded.insert(preset.id)
+            }
+        }
+        let toAdd = ShaderGradientPresets.all.filter { !seeded.contains($0.id) }
+        for preset in toAdd {
+            library.addShaderGradient(preset.config, name: preset.name)
+            seeded.insert(preset.id)
+        }
+        settings.seededGradientPresetIDs = seeded.sorted()
+        if !toAdd.isEmpty { persist() }
     }
 
     /// Called once from the app delegate after launch.

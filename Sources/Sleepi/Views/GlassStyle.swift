@@ -4,13 +4,12 @@ import SleepiKit
 
 /// Sidebar destinations.
 enum AppTab: String, CaseIterable, Identifiable {
-    case wallpapers, gradients, screensaver, settings
+    case wallpapers, screensaver, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .wallpapers: return "Wallpapers"
-        case .gradients: return "Gradients"
         case .screensaver: return "Screensaver"
         case .settings: return "Settings"
         }
@@ -19,7 +18,6 @@ enum AppTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .wallpapers: return "photo.on.rectangle.angled"
-        case .gradients: return "circle.hexagongrid.fill"
         case .screensaver: return "moon.zzz.fill"
         case .settings: return "gearshape.fill"
         }

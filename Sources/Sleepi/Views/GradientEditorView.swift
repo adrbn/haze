@@ -3,16 +3,17 @@ import SleepiKit
 
 struct GradientEditorView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var config: GradientConfig
     @State private var name: String
     private let existing: ContentItem?
+    private let onClose: () -> Void
 
-    init(config: GradientConfig, name: String, existing: ContentItem?) {
+    init(config: GradientConfig, name: String, existing: ContentItem?, onClose: @escaping () -> Void) {
         _config = State(initialValue: config)
         _name = State(initialValue: name)
         self.existing = existing
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -68,7 +69,7 @@ struct GradientEditorView: View {
 
             Divider()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onClose() }
                 Spacer()
                 Button("Save to Library") { save(setAsWallpaper: false) }
                 Button("Set as Wallpaper") { save(setAsWallpaper: true) }
@@ -164,6 +165,6 @@ struct GradientEditorView: View {
             item = model.addGradient(config, name: finalName)
         }
         if setAsWallpaper { model.setWallpaper(item) }
-        dismiss()
+        onClose()
     }
 }

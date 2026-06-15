@@ -33,15 +33,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let root = MainWindowView().environmentObject(model)
             let hosting = NSHostingController(rootView: root)
             let window = NSWindow(contentViewController: hosting)
-            window.title = "Sleepi"
+            window.title = ""
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
             window.isMovableByWindowBackground = true
             window.appearance = NSAppearance(named: .darkAqua)   // UI is designed dark
-            window.minSize = NSSize(width: 880, height: 580)
-            window.setContentSize(NSSize(width: 1040, height: 700))
+            // Managed window in its own Space — don't float as a tile over another
+            // app's full-screen Space; activating switches to the desktop Space.
+            window.collectionBehavior = [.fullScreenPrimary]
+            window.minSize = NSSize(width: 900, height: 620)
+            window.setContentSize(NSSize(width: 1120, height: 760))
             window.center()
             window.delegate = self
             mainWindow = window
@@ -49,6 +52,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: Gradient editor — its own window (the Metal preview renders reliably
+    // in a window, unlike a SwiftUI sheet).
+
+    enum GradientEditorTarget {
+        case newFluid, newClassic, existing(ContentItem)
+    }
+
+    private var editorWindow: NSWindow?
+
+    func showGradientEditor(_ target: GradientEditorTarget) {
+        let close: () -> Void = { [weak self] in
+            self?.editorWindow?.close()
+            self?.editorWindow = nil
+        }
+
+        let root: AnyView
+        switch target {
+        case .newFluid:
+            root = AnyView(ShaderGradientEditorView(config: ShaderGradientPresets.default.config,
+                                                    name: "My Fluid Gradient", existing: nil, onClose: close)
+                .environmentObject(model))
+        case .newClassic:
+            root = AnyView(GradientEditorView(config: GradientPresets.default.config,
+                                              name: "My Gradient", existing: nil, onClose: close)
+                .environmentObject(model))
+        case .existing(let item):
+            if item.type == .shaderGradient {
+                root = AnyView(ShaderGradientEditorView(config: item.shaderGradient ?? ShaderGradientPresets.default.config,
+                                                        name: item.name, existing: item, onClose: close)
+                    .environmentObject(model))
+            } else {
+                root = AnyView(GradientEditorView(config: item.gradient ?? GradientPresets.default.config,
+                                                  name: item.name, existing: item, onClose: close)
+                    .environmentObject(model))
+            }
+        }
+
+        let window = NSWindow(contentViewController: NSHostingController(rootView: root))
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.title = ""
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.isMovableByWindowBackground = true
+        window.center()
+        editorWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {

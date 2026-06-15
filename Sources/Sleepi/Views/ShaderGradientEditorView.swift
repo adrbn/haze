@@ -3,16 +3,17 @@ import SleepiKit
 
 struct ShaderGradientEditorView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var config: ShaderGradientConfig
     @State private var name: String
     private let existing: ContentItem?
+    private let onClose: () -> Void
 
-    init(config: ShaderGradientConfig, name: String, existing: ContentItem?) {
+    init(config: ShaderGradientConfig, name: String, existing: ContentItem?, onClose: @escaping () -> Void) {
         _config = State(initialValue: config)
         _name = State(initialValue: name)
         self.existing = existing
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -83,7 +84,7 @@ struct ShaderGradientEditorView: View {
 
             Divider()
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onClose() }
                 Spacer()
                 Button("Save to Library") { save(setAsWallpaper: false) }
                 Button("Set as Wallpaper") { save(setAsWallpaper: true) }
@@ -149,7 +150,7 @@ struct ShaderGradientEditorView: View {
             item = model.addShaderGradient(config, name: finalName)
         }
         if setAsWallpaper { model.setWallpaper(item) }
-        dismiss()
+        onClose()
     }
 }
 
