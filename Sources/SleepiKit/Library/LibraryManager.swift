@@ -20,6 +20,24 @@ public final class LibraryManager {
     public init() {
         ContentStore.ensureDirectories()
         manifest = JSONStore.load(LibraryManifest.self, from: ContentStore.manifestURL) ?? LibraryManifest()
+        migrateSpeeds()
+    }
+
+    /// Gradient speed is now capped at 1.0 (2.0 looked too fast). Clamp any
+    /// previously-saved gradients so they don't keep animating too fast.
+    private func migrateSpeeds() {
+        var changed = false
+        for idx in manifest.items.indices {
+            if let g = manifest.items[idx].gradient, g.speed > 1.0 {
+                manifest.items[idx].gradient?.speed = 1.0
+                changed = true
+            }
+            if let sg = manifest.items[idx].shaderGradient, sg.speed > 1.0 {
+                manifest.items[idx].shaderGradient?.speed = 1.0
+                changed = true
+            }
+        }
+        if changed { save() }
     }
 
     public var items: [ContentItem] { manifest.items }

@@ -55,7 +55,7 @@ struct ShaderGradientEditorView: View {
                         }
                     }
 
-                    slider("Speed", $config.speed, 0...2)
+                    slider("Speed", $config.speed, 0...1)
                     slider("Density", $config.density, 0...3)
                     slider("Frequency", $config.frequency, 0...10)
                     slider("Strength", $config.strength, 0...8)

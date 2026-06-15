@@ -45,7 +45,7 @@ struct GradientEditorView: View {
 
                     colorsSection
 
-                    slider("Speed", $config.speed, 0...2)
+                    slider("Speed", $config.speed, 0...1)
                     slider("Warp", $config.warp, 0...2)
                     slider("Grain", $config.grain, 0...1)
                     slider("Blur", $config.blur, 0...1)

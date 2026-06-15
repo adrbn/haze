@@ -76,7 +76,7 @@ final class AppModel: ObservableObject {
     }
 
     var currentSpeedRange: ClosedRange<Double> {
-        currentWallpaper?.type == .video ? 0.25...2.0 : 0.0...2.0
+        currentWallpaper?.type == .video ? 0.25...2.0 : 0.0...1.0
     }
 
     private func speed(of item: ContentItem?) -> Double {

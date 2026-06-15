@@ -11,6 +11,7 @@ public final class OcclusionDetector {
 
     private var tokens: [NSObjectProtocol] = []
     private var pendingReeval: DispatchWorkItem?
+    private var pollTimer: Timer?
 
     public init() {}
 
@@ -42,6 +43,8 @@ public final class OcclusionDetector {
     public func stop() {
         pendingReeval?.cancel()
         pendingReeval = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
         for token in tokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             NotificationCenter.default.removeObserver(token)
@@ -51,6 +54,7 @@ public final class OcclusionDetector {
 
     deinit {
         pendingReeval?.cancel()
+        pollTimer?.invalidate()
         for token in tokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             NotificationCenter.default.removeObserver(token)
@@ -59,10 +63,28 @@ public final class OcclusionDetector {
 
     public func evaluate() {
         let occluded = Self.computeOccluded()
-        guard occluded != currentlyOccluded else { return }
-        currentlyOccluded = occluded
-        Log.power.debug("occluded -> \(occluded, privacy: .public)")
-        onChange?(occluded)
+        if occluded != currentlyOccluded {
+            currentlyOccluded = occluded
+            Log.power.debug("occluded -> \(occluded, privacy: .public)")
+            onChange?(occluded)
+        }
+        updatePollTimer()
+    }
+
+    /// "Show Desktop" / Mission Control don't fire reliable notifications for
+    /// desktop-level windows, so while covered we poll occlusion — that way the
+    /// wallpaper resumes on reveal without the user re-selecting it. Runs only
+    /// while occluded (the wallpaper is paused then, so cost is negligible).
+    private func updatePollTimer() {
+        if currentlyOccluded {
+            guard pollTimer == nil else { return }
+            let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.evaluate() }
+            RunLoop.main.add(timer, forMode: .common)
+            pollTimer = timer
+        } else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        }
     }
 
     static func computeOccluded() -> Bool {

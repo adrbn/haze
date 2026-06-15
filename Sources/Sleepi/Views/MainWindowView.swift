@@ -69,7 +69,8 @@ struct MainWindowView: View {
                                 return min(max(model.currentWallpaperSpeed, r.lowerBound), r.upperBound)
                             },
                             set: { model.setCurrentSpeed($0) }),
-                        in: model.currentSpeedRange)
+                        in: model.currentSpeedRange,
+                        step: 0.1)
                     .controlSize(.small)
                 }
             }
