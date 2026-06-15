@@ -2,64 +2,35 @@ import SwiftUI
 import AppKit
 import SleepiKit
 
-/// Live, animated 2D gradient preview. Timer-driven (externally driven) so it
-/// renders reliably inside a sheet.
+/// Live, animated 2D gradient preview. Self-driven (the MTKView's own display
+/// link), the same path the desktop wallpaper uses.
 struct GradientMetalPreview: NSViewRepresentable {
     let config: GradientConfig
 
     func makeNSView(context: Context) -> NSView {
-        let container = NSView()
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.black.cgColor
-        if let renderer = GradientRenderer(config: config) {
-            context.coordinator.renderer = renderer
-            let view = renderer.view
-            view.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(view)
-            NSLayoutConstraint.activate([
-                view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                view.topAnchor.constraint(equalTo: container.topAnchor),
-                view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            ])
-            renderer.setExternallyDriven(true)
-            renderer.start()
-            context.coordinator.startTimer(fps: config.fps)
+        guard let renderer = GradientRenderer(config: config) else {
+            let placeholder = NSView()
+            placeholder.wantsLayer = true
+            placeholder.layer?.backgroundColor = NSColor.black.cgColor
+            return placeholder
         }
-        return container
+        context.coordinator.renderer = renderer
+        renderer.start()
+        return renderer.view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.renderer?.update(config: config)
-        context.coordinator.startTimer(fps: config.fps)
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.stop()
+        coordinator.renderer?.stop()
+        coordinator.renderer = nil
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {
         var renderer: GradientRenderer?
-        private var timer: Timer?
-        private var fps = 0
-
-        func startTimer(fps requested: Int) {
-            let clamped = min(max(requested > 0 ? requested : 30, 1), 60)
-            if timer != nil, clamped == fps { return }
-            fps = clamped
-            timer?.invalidate()
-            let t = Timer(timeInterval: 1.0 / Double(clamped), repeats: true) { [weak self] _ in
-                self?.renderer?.tick()
-            }
-            RunLoop.main.add(t, forMode: .common)
-            timer = t
-        }
-
-        func stop() {
-            timer?.invalidate(); timer = nil
-            renderer?.stop(); renderer = nil
-        }
     }
 }
