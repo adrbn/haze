@@ -13,7 +13,7 @@ public struct ShaderGradientPreset: Identifiable, Hashable, Sendable {
     }
 
     public func makeItem() -> ContentItem {
-        ContentItem.shaderGradient(config, name: name, author: "ShaderGradient")
+        ContentItem.shaderGradient(config, name: name, author: "Sleepi")
     }
 }
 

@@ -2,7 +2,9 @@ import SwiftUI
 import AppKit
 import SleepiKit
 
-/// Live, animated 3D ShaderGradient preview that updates as the config changes.
+/// Live, animated 3D ShaderGradient preview. Driven by a timer (externally
+/// driven) so it renders reliably inside a sheet, where MTKView's own display
+/// link does not always fire.
 struct ShaderGradientMetalPreview: NSViewRepresentable {
     let config: ShaderGradientConfig
 
@@ -21,7 +23,9 @@ struct ShaderGradientMetalPreview: NSViewRepresentable {
                 view.topAnchor.constraint(equalTo: container.topAnchor),
                 view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             ])
+            renderer.setExternallyDriven(true)
             renderer.start()
+            context.coordinator.startTimer()
         }
         return container
     }
@@ -31,13 +35,27 @@ struct ShaderGradientMetalPreview: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.renderer?.stop()
-        coordinator.renderer = nil
+        coordinator.stop()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {
         var renderer: ShaderGradientRenderer?
+        private var timer: Timer?
+
+        func startTimer() {
+            timer?.invalidate()
+            let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                self?.renderer?.tick()
+            }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
+        }
+
+        func stop() {
+            timer?.invalidate(); timer = nil
+            renderer?.stop(); renderer = nil
+        }
     }
 }

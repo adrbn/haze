@@ -91,6 +91,16 @@ struct ShaderGradientEditorView: View {
             .padding(16)
         }
         .frame(width: 540, height: 820)
+        .onChange(of: config) { liveApply() }
+    }
+
+    /// While editing the wallpaper that's currently playing, push slider changes
+    /// (speed, colours, etc.) to the live desktop in real time.
+    private func liveApply() {
+        guard let existing else { return }
+        var updated = existing
+        updated.shaderGradient = config
+        model.liveUpdateCurrent(updated)
     }
 
     private func slider(_ label: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {

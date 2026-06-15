@@ -24,10 +24,10 @@ struct GradientsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "Gradients",
-                       subtitle: "Animated gradients — 3D ShaderGradient or classic 2D") {
+                       subtitle: "Animated gradients — fluid 3D or classic 2D") {
                 Menu {
-                    Button("3D ShaderGradient") { editing = .newShader }
-                    Button("Classic 2D") { editing = .newClassic }
+                    Button("Fluid Gradient (3D)") { editing = .newShader }
+                    Button("Classic Gradient (2D)") { editing = .newClassic }
                 } label: {
                     Label("New Gradient", systemImage: "plus")
                 }
@@ -39,8 +39,8 @@ struct GradientsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if !shaders.isEmpty {
-                        sectionHeader("3D ShaderGradient",
-                                      "Fluid, lit 3D surfaces — shadergradient.co style")
+                        sectionHeader("Fluid (3D)",
+                                      "Lit, flowing 3D surfaces")
                         grid(shaders, tag: "3D")
                     }
                     if !classics.isEmpty {
@@ -93,7 +93,7 @@ struct GradientsView: View {
         switch target {
         case .newShader:
             ShaderGradientEditorView(config: ShaderGradientPresets.default.config,
-                                     name: "My ShaderGradient", existing: nil)
+                                     name: "My Fluid Gradient", existing: nil)
         case .newClassic:
             GradientEditorView(config: GradientPresets.default.config,
                                name: "My Gradient", existing: nil)

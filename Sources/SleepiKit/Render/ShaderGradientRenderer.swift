@@ -72,6 +72,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         buildPipeline()
         buildMesh()
         updateColors()
+        updateClearColor()
 
         if pipeline == nil || vertexBuffer == nil { return nil }
     }
@@ -85,6 +86,21 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
         updateColors()
+        updateClearColor()
+    }
+
+    public func liveUpdate(_ item: ContentItem) {
+        if let config = item.shaderGradient { update(config: config) }
+    }
+
+    /// Clear to a blend of the gradient's own colours so any uncovered edge
+    /// reads as part of the gradient instead of black.
+    private func updateClearColor() {
+        let cs = config.resolvedColors
+        let r = (cs[0].x + cs[1].x + cs[2].x) / 3
+        let g = (cs[0].y + cs[1].y + cs[2].y) / 3
+        let b = (cs[0].z + cs[1].z + cs[2].z) / 3
+        mtkView.clearColor = MTLClearColor(red: Double(r), green: Double(g), blue: Double(b), alpha: 1)
     }
 
     public func setFPSCap(_ cap: Int) {
@@ -216,7 +232,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         // 50° roll. Position is damped so the full colour range stays in frame.
         let visHalfH = dist * tan(fovy * 0.5)
         let visHalfW = visHalfH * aspect
-        let coverScale = max(visHalfW, visHalfH) * 1.45
+        let coverScale = max(visHalfW, visHalfH) * 1.6
             + Float(abs(config.positionX)) * 0.25 + Float(abs(config.positionY)) * 0.25
 
         let model =

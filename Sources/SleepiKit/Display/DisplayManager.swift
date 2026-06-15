@@ -42,6 +42,14 @@ public final class DisplayManager {
         for entry in entries { entry.renderer.setFPSCap(cap) }
     }
 
+    /// Push a config change to the live renderers in place (no rebuild) — used
+    /// to tweak the currently-playing wallpaper in real time.
+    public func liveUpdate(_ item: ContentItem) {
+        guard currentItem?.id == item.id else { return }
+        currentItem = item
+        for entry in entries { entry.renderer.liveUpdate(item) }
+    }
+
     /// Pause/resume all renderers without tearing down the windows.
     public func setRendering(_ on: Bool) {
         guard rendering != on else { return }

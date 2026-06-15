@@ -76,6 +76,16 @@ struct GradientEditorView: View {
             .padding(16)
         }
         .frame(width: 520, height: 760)
+        .onChange(of: config) { liveApply() }
+    }
+
+    /// While editing the wallpaper that's currently playing, push slider changes
+    /// to the live desktop in real time.
+    private func liveApply() {
+        guard let existing else { return }
+        var updated = existing
+        updated.gradient = config
+        model.liveUpdateCurrent(updated)
     }
 
     private var colorsSection: some View {

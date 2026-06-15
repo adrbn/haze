@@ -24,12 +24,17 @@ public protocol WallpaperRenderer: AnyObject {
 
     /// Advance/redraw one frame (only meaningful when externally driven).
     func tick()
+
+    /// Apply a config change to a live renderer in place (no teardown), used to
+    /// tweak the playing wallpaper in real time. Default: no-op.
+    func liveUpdate(_ item: ContentItem)
 }
 
 public extension WallpaperRenderer {
     func setFPSCap(_ cap: Int) {}
     func setExternallyDriven(_ on: Bool) {}
     func tick() {}
+    func liveUpdate(_ item: ContentItem) {}
 }
 
 extension Scaling {

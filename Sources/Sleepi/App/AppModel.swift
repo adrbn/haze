@@ -111,6 +111,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Live-tweak the currently-playing wallpaper (e.g. speed) without a rebuild
+    /// and without persisting on every slider tick.
+    func liveUpdateCurrent(_ item: ContentItem) {
+        guard settings.wallpaperItemID == item.id else { return }
+        wallpaper.liveUpdate(item: item)
+    }
+
     func deleteItem(_ item: ContentItem) {
         let wasWallpaper = settings.wallpaperItemID == item.id
         library.remove(id: item.id)

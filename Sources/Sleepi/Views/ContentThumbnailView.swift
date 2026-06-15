@@ -38,7 +38,7 @@ extension ContentType {
         case .video: return "Video"
         case .animatedImage: return "Animated"
         case .gradient: return "Gradient"
-        case .shaderGradient: return "3D Gradient"
+        case .shaderGradient: return "Fluid"
         case .image: return "Image"
         }
     }

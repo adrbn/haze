@@ -31,6 +31,11 @@ final class WallpaperController {
         occlusion.evaluate()
     }
 
+    /// Update the playing wallpaper's config in real time (no rebuild).
+    func liveUpdate(item: ContentItem) {
+        display.liveUpdate(item)
+    }
+
     func updateSettings(_ settings: AppSettings) {
         power?.updateSettings(settings)
         display.setFPSCap(settings.globalFPSCap)

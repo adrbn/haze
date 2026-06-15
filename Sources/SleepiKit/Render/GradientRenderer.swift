@@ -66,6 +66,10 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         mtkView.preferredFramesPerSecond = effectiveFPS
     }
 
+    public func liveUpdate(_ item: ContentItem) {
+        if let config = item.gradient { update(config: config) }
+    }
+
     private func updateColors() {
         let colors = config.resolvedColors
         resolvedColorCount = Int32(colors.count)

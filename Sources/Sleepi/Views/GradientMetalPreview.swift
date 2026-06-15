@@ -2,7 +2,8 @@ import SwiftUI
 import AppKit
 import SleepiKit
 
-/// Live, animated Metal gradient preview that updates as the config changes.
+/// Live, animated 2D gradient preview. Timer-driven (externally driven) so it
+/// renders reliably inside a sheet.
 struct GradientMetalPreview: NSViewRepresentable {
     let config: GradientConfig
 
@@ -21,7 +22,9 @@ struct GradientMetalPreview: NSViewRepresentable {
                 view.topAnchor.constraint(equalTo: container.topAnchor),
                 view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             ])
+            renderer.setExternallyDriven(true)
             renderer.start()
+            context.coordinator.startTimer()
         }
         return container
     }
@@ -31,13 +34,27 @@ struct GradientMetalPreview: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.renderer?.stop()
-        coordinator.renderer = nil
+        coordinator.stop()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {
         var renderer: GradientRenderer?
+        private var timer: Timer?
+
+        func startTimer() {
+            timer?.invalidate()
+            let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+                self?.renderer?.tick()
+            }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
+        }
+
+        func stop() {
+            timer?.invalidate(); timer = nil
+            renderer?.stop(); renderer = nil
+        }
     }
 }
