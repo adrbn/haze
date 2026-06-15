@@ -22,9 +22,24 @@ public final class WallpaperWindow: NSWindow {
 
         // Sit at the desktop-picture level → below Finder icons, above nothing.
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        collectionBehavior = Self.desktopBehavior
 
         setFrame(screen.frame, display: false)
+    }
+
+    /// The full set production wallpaper apps use. Crucially `.fullScreenAuxiliary`:
+    /// without it the wallpaper vanishes on / during swipes to-from full-screen
+    /// app Spaces (its absence is why the live wallpaper disappeared during swipes
+    /// until re-selected). `.stationary` still keeps it out of Mission Control
+    /// snapshots, so MC shows the system poster, not a black capture.
+    static let desktopBehavior: NSWindow.CollectionBehavior =
+        [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+
+    /// Re-assert Space membership after the window server settles (collectionBehavior
+    /// set only in `init()` may not take on every Space right at launch).
+    public func reaffirmDesktopPresence() {
+        collectionBehavior = Self.desktopBehavior
+        orderFrontRegardless()
     }
 
     public override var canBecomeKey: Bool { false }

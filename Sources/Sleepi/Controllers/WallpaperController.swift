@@ -61,6 +61,9 @@ final class WallpaperController {
         power?.setUserPaused(paused)
     }
 
+    /// Re-assert the wallpaper windows' Space membership after launch settles.
+    func reaffirm() { display.reaffirmWindows() }
+
     var isUserPaused: Bool { power?.isUserPaused ?? false }
 
     func clear() { display.clear() }

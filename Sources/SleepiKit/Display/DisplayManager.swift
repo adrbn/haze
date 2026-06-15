@@ -72,6 +72,13 @@ public final class DisplayManager {
         currentItem = nil
     }
 
+    /// Re-assert every wallpaper window's Space membership (no rebuild) — used a
+    /// moment after launch, when the window server may not have bound the window
+    /// to all Spaces yet.
+    public func reaffirmWindows() {
+        for entry in entries { entry.window.reaffirmDesktopPresence() }
+    }
+
     // MARK: Internals
 
     private func rebuild() {
