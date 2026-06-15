@@ -45,15 +45,6 @@ final class WallpaperController {
         power?.setUserPaused(paused)
     }
 
-    /// Re-raise the live wallpaper windows above the system desktop picture —
-    /// needed right after we change the macOS desktop image, which macOS layers
-    /// on top of our desktop-level windows.
-    func reassert() { display.reassertWindows() }
-
-    /// The static poster shown behind the Metal view (for Space transitions /
-    /// Mission Control, where Metal can't be snapshotted).
-    func setFallbackImage(_ url: URL?) { display.setFallbackImage(url) }
-
     var isUserPaused: Bool { power?.isUserPaused ?? false }
 
     func clear() { display.clear() }

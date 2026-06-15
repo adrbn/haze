@@ -21,27 +21,23 @@ enum SystemWallpaper {
         return updated
     }
 
-    /// Generate a poster for `item` off the main thread, optionally set it as the
-    /// macOS desktop picture, and hand the poster URL back on the main actor (so
-    /// it can be shown behind the live Metal view as a snapshot-able fallback).
-    static func apply(for item: ContentItem,
-                      setSystemPicture: Bool,
-                      then: (@MainActor @Sendable (URL?) -> Void)? = nil) {
+    /// Generate a matching poster for `item` off the main thread and set it as the
+    /// macOS desktop picture. The live wallpaper window (`.stationary`) is treated
+    /// as the desktop and isn't snapshotted by Mission Control / the Spaces
+    /// switcher / lock / login — those draw the system picture, so the poster
+    /// makes them match the live wallpaper instead of showing the old background.
+    static func apply(for item: ContentItem) {
         Task.detached(priority: .utility) {
-            let posterURL = makePoster(for: item)
-            await MainActor.run {
-                if setSystemPicture, let posterURL { setDesktopPicture(posterURL) }
-                then?(posterURL)
-            }
+            guard let posterURL = makePoster(for: item) else { return }
+            await MainActor.run { setDesktopPicture(posterURL) }
         }
     }
 
-    /// Restore the captured original desktop picture, if any. `then` runs after.
+    /// Restore the captured original desktop picture, if any.
     @MainActor
-    static func restore(savedPath: String?, then: (@MainActor () -> Void)? = nil) {
+    static func restore(savedPath: String?) {
         guard let savedPath, FileManager.default.fileExists(atPath: savedPath) else { return }
         setDesktopPicture(URL(fileURLWithPath: savedPath))
-        then?()
     }
 
     // MARK: - Setting the picture

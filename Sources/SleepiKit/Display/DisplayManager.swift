@@ -9,7 +9,6 @@ public final class DisplayManager {
     private struct ScreenEntry {
         let window: WallpaperWindow
         let renderer: WallpaperRenderer
-        let backing: NSImageView
     }
 
     private var entries: [ScreenEntry] = []
@@ -19,36 +18,14 @@ public final class DisplayManager {
     private var rendering = true
     private var lastScreenConfig: [CGRect] = []
     private var pendingRebuild: DispatchWorkItem?
-    /// A static still of the current wallpaper, shown *behind* the Metal view.
-    /// macOS can't snapshot a Metal layer for Space transitions / Mission Control
-    /// (it renders black there), but it does snapshot ordinary image layers — so
-    /// this poster shows through the non-opaque Metal view exactly when the live
-    /// frame can't be captured, instead of black.
-    private var fallbackImageURL: URL?
 
     public init() {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
-
-        // The macOS desktop-picture window sits at the same level as ours and can
-        // be raised above it (e.g. when the Wallpaper settings pane opens, after a
-        // Space switch, or on wake), which makes our live wallpaper "disappear"
-        // behind the system one. Re-assert our windows to the front on those
-        // events so the live wallpaper stays visible.
-        let ws = NSWorkspace.shared.notificationCenter
-        ws.addObserver(self, selector: #selector(reassertWindows),
-                       name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
-        ws.addObserver(self, selector: #selector(reassertWindows),
-                       name: NSWorkspace.didWakeNotification, object: nil)
-        ws.addObserver(self, selector: #selector(reassertWindows),
-                       name: NSWorkspace.didActivateApplicationNotification, object: nil)
     }
 
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-        NSWorkspace.shared.notificationCenter.removeObserver(self)
-    }
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     public var hasContent: Bool { currentItem != nil }
 
@@ -95,26 +72,6 @@ public final class DisplayManager {
         currentItem = nil
     }
 
-    /// Set the static poster shown behind the live Metal view (so Space
-    /// transitions / Mission Control show it instead of black).
-    public func setFallbackImage(_ url: URL?) {
-        fallbackImageURL = url
-        let image = url.flatMap { NSImage(contentsOf: $0) }
-        for entry in entries { entry.backing.image = image }
-    }
-
-    /// Re-pin every wallpaper window to the desktop level and bring it to the
-    /// front of that level, so the system desktop picture can't sit on top.
-    @objc public func reassertWindows() {
-        guard !entries.isEmpty else { return }
-        let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        for entry in entries {
-            entry.window.level = level
-            entry.window.orderFrontRegardless()
-            if rendering { entry.renderer.redraw() }   // refresh in case it went stale/black
-        }
-    }
-
     // MARK: Internals
 
     private func rebuild() {
@@ -126,28 +83,13 @@ public final class DisplayManager {
                 continue
             }
             let window = WallpaperWindow(screen: screen)
-
-            // Container: poster image behind, live Metal view on top.
-            let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-            container.wantsLayer = true
-            container.autoresizingMask = [.width, .height]
-
-            let backing = NSImageView(frame: container.bounds)
-            backing.imageScaling = .scaleAxesIndependently
-            backing.autoresizingMask = [.width, .height]
-            backing.image = fallbackImageURL.flatMap { NSImage(contentsOf: $0) }
-            container.addSubview(backing)
-
             let contentView = renderer.view
-            contentView.frame = container.bounds
             contentView.autoresizingMask = [.width, .height]
-            container.addSubview(contentView)
-
-            window.contentView = container
+            window.contentView = contentView
             window.orderFrontRegardless()
             renderer.start()
             if !rendering { renderer.pause() }
-            entries.append(ScreenEntry(window: window, renderer: renderer, backing: backing))
+            entries.append(ScreenEntry(window: window, renderer: renderer))
         }
         lastScreenConfig = NSScreen.screens.map(\.frame)
         Log.display.info("Applied '\(item.name, privacy: .public)' to \(self.entries.count, privacy: .public) screen(s)")

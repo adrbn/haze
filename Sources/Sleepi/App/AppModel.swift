@@ -87,34 +87,18 @@ final class AppModel: ObservableObject {
         syncSystemWallpaper()
     }
 
-    /// Generate the wallpaper poster. It's always shown behind the live Metal
-    /// view (so Space swipes / Mission Control aren't black), and — when the user
-    /// opts in — also set as the macOS desktop picture (for lock / login),
-    /// capturing their original once so it can be restored.
+    /// When enabled, set a matching still as the macOS desktop picture so Mission
+    /// Control / the Spaces switcher / lock / login (which draw the system
+    /// picture, not our `.stationary` desktop window) match the live wallpaper.
+    /// The user's original is captured once so it can be restored.
     private func syncSystemWallpaper() {
-        guard let item = currentWallpaper else { return }
-        let setSystem = settings.matchSystemWallpaper
-        if setSystem {
-            let captured = SystemWallpaper.captureOriginal(settings)
-            if captured.savedSystemWallpaperPath != settings.savedSystemWallpaperPath {
-                settings = captured
-                persist()
-            }
+        guard settings.matchSystemWallpaper, let item = currentWallpaper else { return }
+        let captured = SystemWallpaper.captureOriginal(settings)
+        if captured.savedSystemWallpaperPath != settings.savedSystemWallpaperPath {
+            settings = captured
+            persist()
         }
-        SystemWallpaper.apply(for: item, setSystemPicture: setSystem) { [weak self] url in
-            guard let self else { return }
-            self.wallpaper.setFallbackImage(url)
-            if setSystem { self.reassertWallpaperWindows() }
-        }
-    }
-
-    /// macOS layers its desktop picture above our desktop-level windows when it
-    /// changes, so re-raise ours immediately and again after it settles.
-    private func reassertWallpaperWindows() {
-        wallpaper.reassert()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            self?.wallpaper.reassert()
-        }
+        SystemWallpaper.apply(for: item)
     }
 
     // MARK: Speed control (sidebar slider)
@@ -267,9 +251,7 @@ final class AppModel: ObservableObject {
             if newSettings.matchSystemWallpaper {
                 syncSystemWallpaper()
             } else {
-                SystemWallpaper.restore(savedPath: newSettings.savedSystemWallpaperPath) { [weak self] in
-                    self?.reassertWallpaperWindows()
-                }
+                SystemWallpaper.restore(savedPath: newSettings.savedSystemWallpaperPath)
             }
         }
     }
