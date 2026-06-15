@@ -111,6 +111,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Rename an item without reapplying/restarting the wallpaper.
+    func rename(_ item: ContentItem, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != item.name else { return }
+        var updated = item
+        updated.name = trimmed
+        library.update(updated)
+        refresh()
+    }
+
     /// Live-tweak the currently-playing wallpaper (e.g. speed) without a rebuild
     /// and without persisting on every slider tick.
     func liveUpdateCurrent(_ item: ContentItem) {

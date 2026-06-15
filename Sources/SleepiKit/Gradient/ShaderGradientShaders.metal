@@ -81,6 +81,14 @@ float sg_hash(float2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+// 3-input hash — the third component (frame) re-seeds the grain each frame
+// WITHOUT translating the pattern, so the grain shimmers in place (no drift).
+float sg_hash13(float3 p3) {
+    p3 = fract(p3 * 0.1031);
+    p3 += dot(p3, float3(p3.z, p3.y, p3.x) + 31.32);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 // Surface displacement (along the plane normal / Z in local space).
 float sg_displace(float2 p, constant SGUniforms &u) {
     float t = u.time * u.speed;
@@ -139,9 +147,10 @@ fragment float4 sg_fragment(SGOut in [[stage_in]],
     float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0);
     col += fres * u.reflection;
 
-    // Film grain.
+    // Film grain — re-seeded per frame (no spatial drift). Skipped when blur is
+    // active (u.grain passed as 0); grain is then added over the blur instead.
     if (u.grain > 0.001) {
-        float g = sg_hash(in.position.xy + floor(u.time * 24.0) * 17.0) - 0.5;
+        float g = sg_hash13(float3(in.position.xy, floor(u.time * 24.0))) - 0.5;
         col += g * u.grain * 0.16;
     }
 

@@ -72,7 +72,8 @@ struct GradientsView: View {
             ForEach(items) { item in
                 ContentCard(item: item,
                             isSelected: model.settings.wallpaperItemID == item.id,
-                            tag: tag) {
+                            tag: tag,
+                            onRename: { model.rename(item, to: $0) }) {
                     model.setWallpaper(item)
                 }
                 .contextMenu {

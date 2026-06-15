@@ -29,7 +29,8 @@ struct WallpapersView: View {
                     LazyVGrid(columns: libraryGridColumns, spacing: 18) {
                         ForEach(media) { item in
                             ContentCard(item: item,
-                                        isSelected: model.settings.wallpaperItemID == item.id) {
+                                        isSelected: model.settings.wallpaperItemID == item.id,
+                                        onRename: { model.rename(item, to: $0) }) {
                                 model.setWallpaper(item)
                             }
                             .contextMenu { menu(for: item) }

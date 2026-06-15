@@ -43,6 +43,14 @@ float hash12(float2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+// 3-input hash — the third component (frame) re-seeds the grain each frame
+// without translating the pattern, so grain shimmers in place (no drift).
+float hash13(float3 p3) {
+    p3 = fract(p3 * 0.1031);
+    p3 += dot(p3, float3(p3.z, p3.y, p3.x) + 31.32);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 float vnoise(float2 p) {
     float2 i = floor(p);
     float2 f = fract(p);
@@ -106,10 +114,9 @@ fragment float4 sleepi_gradient_fragment(VSOut in [[stage_in]],
     float3 col = paletteColor(field, colors, max(u.colorCount, 2));
     col *= u.brightness;
 
-    // Film grain — high-quality hash, stepped ~24x/sec so it doesn't crawl
-    // per frame. Scaled by luminance so highlights stay clean.
-    float2 grainCoord = in.position.xy + floor(u.time * 24.0) * 17.0;
-    float g = hash12(grainCoord) - 0.5;
+    // Film grain — re-seeded per frame (no spatial drift). Skipped when blur is
+    // active (u.grain passed as 0); grain is added over the blur instead.
+    float g = hash13(float3(in.position.xy, floor(u.time * 24.0))) - 0.5;
     col += g * u.grain;
 
     return float4(clamp(col, 0.0, 1.0), 1.0);

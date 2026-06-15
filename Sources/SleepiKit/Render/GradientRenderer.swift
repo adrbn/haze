@@ -21,8 +21,10 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
 
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
+    private var blurredTexture: MTLTexture?
     private var blurKernel: MPSImageGaussianBlur?
     private var blurSigma: Float = -1
+    private var compositePipeline: MTLRenderPipelineState?
 
     public var view: NSView { mtkView }
 
@@ -40,7 +42,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         super.init()
 
         mtkView.colorPixelFormat = .bgra8Unorm
-        mtkView.framebufferOnly = config.blur <= 0   // false lets MPS write the drawable
+        mtkView.framebufferOnly = true   // MPS writes an offscreen; the drawable is only a render target
         mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
         mtkView.layer?.isOpaque = true
@@ -64,13 +66,13 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     public func update(config: GradientConfig) {
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
-        mtkView.framebufferOnly = config.blur <= 0
         if config.blur <= 0 { releaseBlurResources() }
         updateColors()
     }
 
     private func releaseBlurResources() {
         sceneTexture = nil
+        blurredTexture = nil
         blurKernel = nil
         blurSigma = -1
     }
@@ -102,6 +104,12 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             desc.fragmentFunction = library.makeFunction(name: "sleepi_gradient_fragment")
             desc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat
             pipeline = try device.makeRenderPipelineState(descriptor: desc)
+
+            let compDesc = MTLRenderPipelineDescriptor()
+            compDesc.vertexFunction = library.makeFunction(name: "composite_vertex")
+            compDesc.fragmentFunction = library.makeFunction(name: "composite_grain_fragment")
+            compDesc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat
+            compositePipeline = try device.makeRenderPipelineState(descriptor: compDesc)
         } catch {
             Log.render.error("Gradient pipeline build failed: \(error.localizedDescription, privacy: .public)")
             pipeline = nil
@@ -152,25 +160,49 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             colorCount: resolvedColorCount,
             style: Int32(config.style.shaderIndex))
 
-        if config.blur > 0, let scene = sceneColorTexture(size: size) {
+        if config.blur > 0,
+           let scene = sceneColorTexture(size: size),
+           let blurred = ensureBlurred(size: size),
+           let compositePipeline {
+            uniforms.grain = 0   // grain added OVER the blur in the composite pass
             let sigma = max(Float(config.blur) * 36.0, 0.5)
-            let pass = MTLRenderPassDescriptor()
-            pass.colorAttachments[0].texture = scene
-            pass.colorAttachments[0].loadAction = .clear
-            pass.colorAttachments[0].clearColor = view.clearColor
-            pass.colorAttachments[0].storeAction = .store
-            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
-                commandBuffer.commit()
-                return
+
+            // Pass 1 — gradient (grain-free) -> offscreen.
+            let scenePass = MTLRenderPassDescriptor()
+            scenePass.colorAttachments[0].texture = scene
+            scenePass.colorAttachments[0].loadAction = .clear
+            scenePass.colorAttachments[0].clearColor = view.clearColor
+            scenePass.colorAttachments[0].storeAction = .store
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: scenePass) else {
+                commandBuffer.commit(); return
             }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
+
+            // Pass 2 — blur.
             if blurKernel == nil || blurSigma != sigma {
                 let kernel = MPSImageGaussianBlur(device: device, sigma: sigma)
                 kernel.edgeMode = .clamp
                 blurKernel = kernel
                 blurSigma = sigma
             }
-            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene, destinationTexture: drawable.texture)
+            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene, destinationTexture: blurred)
+
+            // Pass 3 — composite + grain -> drawable.
+            let drawPass = MTLRenderPassDescriptor()
+            drawPass.colorAttachments[0].texture = drawable.texture
+            drawPass.colorAttachments[0].loadAction = .dontCare
+            drawPass.colorAttachments[0].storeAction = .store
+            guard let comp = commandBuffer.makeRenderCommandEncoder(descriptor: drawPass) else {
+                commandBuffer.commit(); return
+            }
+            var cu = CompositeUniforms(
+                resolution: SIMD2<Float>(Float(size.width), Float(size.height)),
+                grain: Float(config.grain), time: elapsed)
+            comp.setRenderPipelineState(compositePipeline)
+            comp.setFragmentBytes(&cu, length: MemoryLayout<CompositeUniforms>.stride, index: 0)
+            comp.setFragmentTexture(blurred, index: 0)
+            comp.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            comp.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
         } else {
@@ -183,6 +215,18 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             commandBuffer.present(drawable)
             commandBuffer.commit()
         }
+    }
+
+    /// Offscreen target for the blurred result (MPS writes it, composite reads it).
+    private func ensureBlurred(size: CGSize) -> MTLTexture? {
+        let w = Int(size.width), h = Int(size.height)
+        guard w > 0, h > 0 else { return nil }
+        if let t = blurredTexture, t.width == w, t.height == h { return t }
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: mtkView.colorPixelFormat, width: w, height: h, mipmapped: false)
+        desc.usage = [.shaderRead, .shaderWrite]
+        desc.storageMode = .private
+        blurredTexture = device.makeTexture(descriptor: desc)
+        return blurredTexture
     }
 
     private func encodeGradient(_ encoder: MTLRenderCommandEncoder,
