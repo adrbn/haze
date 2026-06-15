@@ -10,9 +10,7 @@ struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var category: LibraryCategory = .all
 
-    private var shown: [ContentItem] {
-        model.items(in: category, pinnedFirst: model.settings.wallpaperItemID)
-    }
+    private var shown: [ContentItem] { model.items(in: category) }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -7,9 +7,7 @@ struct ScreensaverSettingsView: View {
     @State private var statusMessage: String?
     @State private var category: LibraryCategory = .all
 
-    private var shown: [ContentItem] {
-        model.items(in: category, pinnedFirst: model.settings.screensaverItemID)
-    }
+    private var shown: [ContentItem] { model.items(in: category) }
 
     var body: some View {
         VStack(spacing: 0) {
