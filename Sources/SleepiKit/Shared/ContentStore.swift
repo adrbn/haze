@@ -1,9 +1,13 @@
 import Foundation
+import Darwin
 
 /// Filesystem layout shared between the app and the screensaver.
 ///
-/// Both processes run as the user and are non-sandboxed, so a plain directory
-/// under Application Support is reachable from either side — no App Group needed.
+/// The app is non-sandboxed and writes here. The screensaver host
+/// (`legacyScreenSaver`) IS sandboxed but has read-only access to the whole
+/// disk — however, inside the sandbox `FileManager`'s `.applicationSupportDirectory`
+/// redirects to the (empty) sandbox container. So we resolve the *real* home via
+/// `getpwuid`, which both processes agree on, and the saver reads from it.
 public enum ContentStore {
     public static let appName = "Sleepi"
 
@@ -11,14 +15,29 @@ public enum ContentStore {
     /// Application Support. Production code never sets this.
     public static var overrideRootURL: URL?
 
-    /// `~/Library/Application Support/Sleepi`
+    /// Real home directory, bypassing sandbox-container redirection.
+    static var realHome: URL {
+        // getpwuid reads the real passwd entry (not redirected by the sandbox).
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            let path = String(cString: dir)
+            if !path.isEmpty, !path.contains("/Containers/") {
+                return URL(fileURLWithPath: path, isDirectory: true)
+            }
+        }
+        // Fallback if getpwuid is restricted: reconstruct from the user name.
+        let user = NSUserName()
+        if !user.isEmpty {
+            return URL(fileURLWithPath: "/Users/\(user)", isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    /// `~/Library/Application Support/Sleepi` (real path, sandbox-proof)
     public static var rootURL: URL {
         if let overrideRootURL { return overrideRootURL }
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return base.appendingPathComponent(appName, isDirectory: true)
+        return realHome
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent(appName, isDirectory: true)
     }
 
     public static var mediaURL: URL { rootURL.appendingPathComponent("Media", isDirectory: true) }
