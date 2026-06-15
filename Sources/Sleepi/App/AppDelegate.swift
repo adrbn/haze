@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.titleVisibility = .hidden
             window.isReleasedWhenClosed = false
             window.isMovableByWindowBackground = true
+            window.appearance = NSAppearance(named: .darkAqua)   // UI is designed dark
             window.minSize = NSSize(width: 880, height: 580)
             window.setContentSize(NSSize(width: 1040, height: 700))
             window.center()

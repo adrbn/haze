@@ -21,6 +21,7 @@ struct MainWindowView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 880, minHeight: 580)
+        .preferredColorScheme(.dark)   // UI is designed dark; keep text contrast correct in Light Mode
     }
 
     @ViewBuilder

@@ -55,7 +55,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var blurSigma: Float = -1
     private var compositePipeline: MTLRenderPipelineState?
 
-    private static let grid = 160   // plane subdivisions
+    private static let grid = 110   // plane subdivisions (smooth enough; ~2.1x fewer verts than 160 → lighter GPU)
 
     public var view: NSView { mtkView }
 
