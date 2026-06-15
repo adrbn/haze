@@ -69,7 +69,7 @@ extension RGBAColor {
     }
 }
 
-/// Cheap static representation of a gradient (used for grid thumbnails).
+/// Cheap static representation of a 2D gradient (used for grid thumbnails).
 struct GradientSwatch: View {
     let config: GradientConfig
     var body: some View {
@@ -77,5 +77,18 @@ struct GradientSwatch: View {
             colors: config.colors.map(\.swiftUIColor),
             startPoint: .topLeading,
             endPoint: .bottomTrailing)
+    }
+}
+
+/// Cheap static representation of a 3D ShaderGradient (3-stop, rolled to match).
+struct ShaderGradientSwatch: View {
+    let config: ShaderGradientConfig
+    var body: some View {
+        LinearGradient(
+            colors: config.colors.map(\.swiftUIColor),
+            startPoint: .top,
+            endPoint: .bottom)
+        .rotationEffect(.degrees(config.rotationZ))
+        .scaleEffect(2.0)   // cover corners after the roll
     }
 }

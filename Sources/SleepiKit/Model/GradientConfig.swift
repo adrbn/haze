@@ -55,8 +55,8 @@ public enum GradientStyle: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Everything needed to render an animated gradient. Fully Codable so gradient
-/// items can be persisted in the library and shared.
+/// Everything needed to render an animated 2D gradient field. Fully Codable so
+/// gradient items can be persisted in the library and shared.
 public struct GradientConfig: Codable, Hashable, Sendable {
     public var colors: [RGBAColor]   // 2...6 used; extras ignored by the shader
     public var speed: Double         // 0...2, animation rate

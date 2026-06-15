@@ -6,26 +6,32 @@ struct GradientsView: View {
     @State private var editing: EditingTarget?
 
     enum EditingTarget: Identifiable {
-        case new
+        case newShader
+        case newClassic
         case existing(ContentItem)
         var id: String {
             switch self {
-            case .new: return "new"
+            case .newShader: return "new-shader"
+            case .newClassic: return "new-classic"
             case .existing(let item): return item.id.uuidString
             }
         }
     }
 
-    private var gradients: [ContentItem] { model.items(ofType: .gradient) }
+    private var gradients: [ContentItem] { model.items.filter { $0.type.isGradient } }
 
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "Gradients",
-                       subtitle: "Animated Metal gradients inspired by shadergradient") {
-                Button { editing = .new } label: {
+                       subtitle: "Animated gradients — 3D ShaderGradient or classic 2D") {
+                Menu {
+                    Button("3D ShaderGradient") { editing = .newShader }
+                    Button("Classic 2D") { editing = .newClassic }
+                } label: {
                     Label("New Gradient", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
                 .controlSize(.large)
             }
 
@@ -57,17 +63,28 @@ struct GradientsView: View {
     @ViewBuilder
     private func editor(for target: EditingTarget) -> some View {
         switch target {
-        case .new:
+        case .newShader:
+            ShaderGradientEditorView(config: ShaderGradientPresets.default.config,
+                                     name: "My ShaderGradient", existing: nil)
+        case .newClassic:
             GradientEditorView(config: GradientPresets.default.config,
                                name: "My Gradient", existing: nil)
         case .existing(let item):
-            GradientEditorView(config: item.gradient ?? GradientPresets.default.config,
-                               name: item.name, existing: item)
+            if item.type == .shaderGradient {
+                ShaderGradientEditorView(config: item.shaderGradient ?? ShaderGradientPresets.default.config,
+                                         name: item.name, existing: item)
+            } else {
+                GradientEditorView(config: item.gradient ?? GradientPresets.default.config,
+                                   name: item.name, existing: item)
+            }
         }
     }
 
     private func duplicate(_ item: ContentItem) {
-        guard let config = item.gradient else { return }
-        model.addGradient(config, name: item.name + " copy")
+        if let sg = item.shaderGradient {
+            model.addShaderGradient(sg, name: item.name + " copy")
+        } else if let g = item.gradient {
+            model.addGradient(g, name: item.name + " copy")
+        }
     }
 }

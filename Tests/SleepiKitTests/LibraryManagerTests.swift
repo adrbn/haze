@@ -51,6 +51,16 @@ final class LibraryManagerTests: XCTestCase {
         XCTAssertTrue(lib.items.allSatisfy { $0.type == .gradient })
     }
 
+    func testSeedShaderGradientsAddsPresets() {
+        let lib = LibraryManager()
+        lib.seedShaderGradientsIfNeeded()
+        let shaders = lib.items(ofType: .shaderGradient)
+        XCTAssertEqual(shaders.count, ShaderGradientPresets.all.count)
+        // Idempotent.
+        lib.seedShaderGradientsIfNeeded()
+        XCTAssertEqual(lib.items(ofType: .shaderGradient).count, ShaderGradientPresets.all.count)
+    }
+
     func testSeedIsIdempotent() {
         let lib = LibraryManager()
         lib.seedDefaultsIfNeeded()

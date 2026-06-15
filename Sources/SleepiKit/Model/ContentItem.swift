@@ -37,7 +37,8 @@ public struct ContentItem: Identifiable, Codable, Hashable, Sendable {
     public var tags: [String]
     public var relativePath: String?     // under ContentStore.mediaURL
     public var thumbnailPath: String?    // under ContentStore.thumbnailsURL
-    public var gradient: GradientConfig? // for .gradient items
+    public var gradient: GradientConfig?              // for .gradient items
+    public var shaderGradient: ShaderGradientConfig?  // for .shaderGradient items
     public var settings: ItemSettings
     public var addedAt: Date
 
@@ -49,6 +50,7 @@ public struct ContentItem: Identifiable, Codable, Hashable, Sendable {
                 relativePath: String? = nil,
                 thumbnailPath: String? = nil,
                 gradient: GradientConfig? = nil,
+                shaderGradient: ShaderGradientConfig? = nil,
                 settings: ItemSettings = ItemSettings(),
                 addedAt: Date = Date()) {
         self.id = id
@@ -59,6 +61,7 @@ public struct ContentItem: Identifiable, Codable, Hashable, Sendable {
         self.relativePath = relativePath
         self.thumbnailPath = thumbnailPath
         self.gradient = gradient
+        self.shaderGradient = shaderGradient
         self.settings = settings
         self.addedAt = addedAt
     }
@@ -74,5 +77,10 @@ public struct ContentItem: Identifiable, Codable, Hashable, Sendable {
     /// A gradient item built from a config (no backing file).
     public static func gradient(_ config: GradientConfig, name: String, author: String? = nil) -> ContentItem {
         ContentItem(type: .gradient, name: name, author: author, gradient: config)
+    }
+
+    /// A shadergradient.co-style 3D gradient item (no backing file).
+    public static func shaderGradient(_ config: ShaderGradientConfig, name: String, author: String? = nil) -> ContentItem {
+        ContentItem(type: .shaderGradient, name: name, author: author, shaderGradient: config)
     }
 }

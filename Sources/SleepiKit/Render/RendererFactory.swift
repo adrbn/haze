@@ -17,6 +17,9 @@ public enum RendererFactory {
         case .gradient:
             guard let config = item.gradient else { return nil }
             return GradientRenderer(config: config, fpsCap: fpsCap)
+        case .shaderGradient:
+            guard let config = item.shaderGradient else { return nil }
+            return ShaderGradientRenderer(config: config, fpsCap: fpsCap)
         }
     }
 }

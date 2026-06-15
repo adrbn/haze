@@ -108,7 +108,12 @@ public final class LibraryManager {
         add(ContentItem.gradient(config, name: name))
     }
 
-    /// Populate the library with the bundled gradient presets if it's empty.
+    @discardableResult
+    public func addShaderGradient(_ config: ShaderGradientConfig, name: String) -> ContentItem {
+        add(ContentItem.shaderGradient(config, name: name))
+    }
+
+    /// Populate the library with the bundled 2D gradient presets if it's empty.
     public func seedDefaultsIfNeeded() {
         guard manifest.items.isEmpty else { return }
         for preset in GradientPresets.all {
@@ -116,6 +121,17 @@ public final class LibraryManager {
         }
         save()
         Log.library.info("Seeded \(self.manifest.items.count, privacy: .public) default gradients")
+    }
+
+    /// Add the bundled 3D ShaderGradient presets if none are present yet
+    /// (also migrates libraries created before 3D gradients existed).
+    public func seedShaderGradientsIfNeeded() {
+        guard !manifest.items.contains(where: { $0.type == .shaderGradient }) else { return }
+        for preset in ShaderGradientPresets.all {
+            manifest.items.append(preset.makeItem())
+        }
+        save()
+        Log.library.info("Seeded \(ShaderGradientPresets.all.count, privacy: .public) ShaderGradient presets")
     }
 
     private func deleteFiles(for item: ContentItem) {

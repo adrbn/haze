@@ -11,7 +11,7 @@ public enum Thumbnailer {
         switch type {
         case .video: return videoThumbnail(url)
         case .image, .animatedImage: return imageThumbnail(url)
-        case .gradient: return nil
+        case .gradient, .shaderGradient: return nil
         }
     }
 

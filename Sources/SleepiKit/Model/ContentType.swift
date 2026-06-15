@@ -4,8 +4,12 @@ import Foundation
 public enum ContentType: String, Codable, Sendable, CaseIterable {
     case video
     case animatedImage   // GIF / APNG
-    case gradient        // Metal-rendered, no backing file
+    case gradient        // 2D Metal field, no backing file
+    case shaderGradient  // 3D shadergradient.co-style surface, no backing file
     case image           // still
+
+    /// True for both gradient kinds (neither is file-backed).
+    public var isGradient: Bool { self == .gradient || self == .shaderGradient }
 
     public static let videoExtensions: Set<String> = ["mov", "mp4", "m4v", "hevc"]
     public static let animatedExtensions: Set<String> = ["gif", "apng"]

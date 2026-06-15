@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     private init() {
         settings = JSONStore.load(AppSettings.self, from: ContentStore.settingsURL) ?? .default
         library.seedDefaultsIfNeeded()
+        library.seedShaderGradientsIfNeeded()
         items = library.items
         settings.launchAtLogin = LaunchAtLogin.isEnabled
     }
@@ -91,6 +92,13 @@ final class AppModel: ObservableObject {
     @discardableResult
     func addGradient(_ config: GradientConfig, name: String) -> ContentItem {
         let item = library.addGradient(config, name: name)
+        refresh()
+        return item
+    }
+
+    @discardableResult
+    func addShaderGradient(_ config: ShaderGradientConfig, name: String) -> ContentItem {
+        let item = library.addShaderGradient(config, name: name)
         refresh()
         return item
     }

@@ -28,6 +28,7 @@ extension ContentType {
         case .video: return "film.fill"
         case .animatedImage: return "square.stack.3d.forward.dottedline.fill"
         case .gradient: return "circle.hexagongrid.fill"
+        case .shaderGradient: return "cube.fill"
         case .image: return "photo.fill"
         }
     }
@@ -37,6 +38,7 @@ extension ContentType {
         case .video: return "Video"
         case .animatedImage: return "Animated"
         case .gradient: return "Gradient"
+        case .shaderGradient: return "3D Gradient"
         case .image: return "Image"
         }
     }
@@ -58,6 +60,8 @@ struct ContentThumbnailView: View {
     private var content: some View {
         if item.type == .gradient, let gradient = item.gradient {
             GradientSwatch(config: gradient)
+        } else if item.type == .shaderGradient, let sg = item.shaderGradient {
+            ShaderGradientSwatch(config: sg)
         } else if let image {
             Image(nsImage: image)
                 .resizable()
