@@ -9,38 +9,37 @@ final class WallpaperController {
     private let display = DisplayManager()
     private let occlusion = OcclusionDetector()
     private var power: PowerMonitor?
-    private var pauseWork: DispatchWorkItem?
+    private var occludeWork: DispatchWorkItem?
 
     func configure(settings: AppSettings) {
         let monitor = PowerMonitor(settings: settings)
+        // Render toggles (user pause, sleep, battery…) apply immediately so the
+        // play/pause button is responsive.
         monitor.onShouldRenderChange = { [weak self] shouldRender in
-            self?.applyRendering(shouldRender)
+            self?.display.setRendering(shouldRender)
         }
         power = monitor
 
-        occlusion.onChange = { [weak monitor] occluded in
-            monitor?.setOccluded(occluded)
+        // Only the *occlusion* signal is debounced: reveal resumes instantly, but
+        // "covered" must hold for a moment before we pause — otherwise transient
+        // window/activation blips stop→start the wallpaper every few seconds
+        // (reads as stutter). This keeps the manual pause button instant.
+        occlusion.onChange = { [weak self, weak monitor] occluded in
+            guard let self else { return }
+            self.occludeWork?.cancel()
+            self.occludeWork = nil
+            if !occluded {
+                monitor?.setOccluded(false)
+            } else {
+                let work = DispatchWorkItem { monitor?.setOccluded(true) }
+                self.occludeWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
+            }
         }
         occlusion.start()
         monitor.setOccluded(occlusion.currentlyOccluded)
 
         display.setRendering(monitor.policy.shouldRender)
-    }
-
-    /// Resume immediately, but only pause after the stop-condition has held for a
-    /// short spell. Transient occlusion/activation blips (e.g. clicking through
-    /// windows over the desktop) would otherwise stop→start the video every few
-    /// seconds, which reads as stutter ("stops/resumes/jumps").
-    private func applyRendering(_ shouldRender: Bool) {
-        pauseWork?.cancel()
-        pauseWork = nil
-        if shouldRender {
-            display.setRendering(true)
-        } else {
-            let work = DispatchWorkItem { [weak self] in self?.display.setRendering(false) }
-            pauseWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
-        }
     }
 
     func apply(item: ContentItem, settings: AppSettings) {
