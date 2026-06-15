@@ -35,6 +35,14 @@ float hash21(float2 p) {
     return fract(p.x * p.y);
 }
 
+// High-quality hash (Dave Hoskins) — even distribution with no banding,
+// stable for large pixel coordinates. Used for film grain.
+float hash12(float2 p) {
+    float3 p3 = fract(float3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 float vnoise(float2 p) {
     float2 i = floor(p);
     float2 f = fract(p);
@@ -98,9 +106,11 @@ fragment float4 sleepi_gradient_fragment(VSOut in [[stage_in]],
     float3 col = paletteColor(field, colors, max(u.colorCount, 2));
     col *= u.brightness;
 
-    // Subtle film grain.
-    float g = hash21(in.position.xy + t);
-    col += (g - 0.5) * u.grain;
+    // Film grain — high-quality hash, stepped ~24x/sec so it doesn't crawl
+    // per frame. Scaled by luminance so highlights stay clean.
+    float2 grainCoord = in.position.xy + floor(u.time * 24.0) * 17.0;
+    float g = hash12(grainCoord) - 0.5;
+    col += g * u.grain;
 
     return float4(clamp(col, 0.0, 1.0), 1.0);
 }

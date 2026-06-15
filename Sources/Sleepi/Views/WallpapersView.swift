@@ -6,10 +6,13 @@ import SleepiKit
 struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
 
+    /// Imported media only — gradients live in their own tab.
+    private var media: [ContentItem] { model.items.filter { $0.type != .gradient } }
+
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "Wallpapers",
-                       subtitle: "\(model.items.count) item\(model.items.count == 1 ? "" : "s") · click to set your live desktop") {
+                       subtitle: "\(media.count) video\(media.count == 1 ? "" : "s"), GIF & image\(media.count == 1 ? "" : "s") · click to set your live desktop") {
                 Button {
                     importPanel()
                 } label: {
@@ -19,12 +22,12 @@ struct WallpapersView: View {
                 .controlSize(.large)
             }
 
-            if model.items.isEmpty {
+            if media.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVGrid(columns: libraryGridColumns, spacing: 18) {
-                        ForEach(model.items) { item in
+                        ForEach(media) { item in
                             ContentCard(item: item,
                                         isSelected: model.settings.wallpaperItemID == item.id) {
                                 model.setWallpaper(item)
