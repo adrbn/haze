@@ -13,7 +13,7 @@ struct MainWindowView: View {
             }
             .navigationSplitViewColumnWidth(min: 196, ideal: 216, max: 260)
             .safeAreaInset(edge: .top, spacing: 0) { brand }
-            .safeAreaInset(edge: .bottom, spacing: 0) { pauseControl }
+            .safeAreaInset(edge: .bottom, spacing: 0) { playbackControls }
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -48,18 +48,42 @@ struct MainWindowView: View {
         .padding(.bottom, 8)
     }
 
-    private var pauseControl: some View {
-        Button {
-            model.togglePause()
-        } label: {
-            Label(model.isPaused ? "Paused" : "Playing",
-                  systemImage: model.isPaused ? "play.fill" : "pause.fill")
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+    private var playbackControls: some View {
+        VStack(spacing: 12) {
+            Divider().opacity(0.35)
+
+            if model.currentSupportsSpeed {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "speedometer").font(.caption2)
+                        Text("Speed").font(.caption.weight(.medium))
+                        Spacer()
+                        Text(String(format: "%.2f×", model.currentWallpaperSpeed))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: Binding(get: { model.currentWallpaperSpeed },
+                                       set: { model.setCurrentSpeed($0) }),
+                        in: model.currentSpeedRange)
+                    .controlSize(.small)
+                }
+            }
+
+            Button {
+                model.togglePause()
+            } label: {
+                Label(model.isPaused ? "Paused" : "Playing",
+                      systemImage: model.isPaused ? "play.fill" : "pause.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+            }
+            .buttonStyle(.bordered)
+            .tint(model.isPaused ? .orange : .accentColor)
         }
-        .buttonStyle(.borderless)
-        .tint(model.isPaused ? .orange : .secondary)
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
     }
 }
 

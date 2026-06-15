@@ -44,10 +44,10 @@ public final class LibraryManager {
         return item
     }
 
-    public func update(_ item: ContentItem) {
+    public func update(_ item: ContentItem, persist: Bool = true) {
         guard let idx = manifest.items.firstIndex(where: { $0.id == item.id }) else { return }
         manifest.items[idx] = item
-        save()
+        if persist { save() }
     }
 
     public func remove(id: UUID) {

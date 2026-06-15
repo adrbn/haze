@@ -14,6 +14,10 @@ final class AppModel: ObservableObject {
     @Published var settings: AppSettings
     @Published private(set) var items: [ContentItem] = []
     @Published var isPaused = false
+    /// Live speed of the playing wallpaper (drives the sidebar slider).
+    @Published var currentWallpaperSpeed: Double = 0.5
+
+    private var speedSaveWork: DispatchWorkItem?
 
     private init() {
         settings = JSONStore.load(AppSettings.self, from: ContentStore.settingsURL) ?? .default
@@ -21,6 +25,7 @@ final class AppModel: ObservableObject {
         library.seedShaderGradientsIfNeeded()
         items = library.items
         settings.launchAtLogin = LaunchAtLogin.isEnabled
+        syncCurrentSpeed()
     }
 
     /// Called once from the app delegate after launch.
@@ -33,6 +38,7 @@ final class AppModel: ObservableObject {
             wallpaper.apply(item: first, settings: settings)
             persist()
         }
+        syncCurrentSpeed()
     }
 
     // MARK: Derived
@@ -57,6 +63,51 @@ final class AppModel: ObservableObject {
         settings.wallpaperItemID = item.id
         wallpaper.apply(item: item, settings: settings)
         persist()
+        currentWallpaperSpeed = speed(of: item)
+    }
+
+    // MARK: Speed control (sidebar slider)
+
+    var currentSupportsSpeed: Bool {
+        switch currentWallpaper?.type {
+        case .gradient, .shaderGradient, .video: return true
+        default: return false
+        }
+    }
+
+    var currentSpeedRange: ClosedRange<Double> {
+        currentWallpaper?.type == .video ? 0.25...2.0 : 0.0...2.0
+    }
+
+    private func speed(of item: ContentItem?) -> Double {
+        guard let item else { return 0.5 }
+        if let g = item.gradient { return g.speed }
+        if let sg = item.shaderGradient { return sg.speed }
+        return item.settings.speed
+    }
+
+    func syncCurrentSpeed() { currentWallpaperSpeed = speed(of: currentWallpaper) }
+
+    /// Live-set the playing wallpaper's speed: applies to the desktop immediately,
+    /// keeps the manifest in memory while dragging, and saves once it settles.
+    func setCurrentSpeed(_ value: Double) {
+        currentWallpaperSpeed = value
+        guard var item = currentWallpaper else { return }
+        if item.gradient != nil { item.gradient?.speed = value }
+        else if item.shaderGradient != nil { item.shaderGradient?.speed = value }
+        else { item.settings.speed = value }
+
+        wallpaper.liveUpdate(item: item)
+        library.update(item, persist: false)
+
+        speedSaveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.library.save()
+            self.items = self.library.items
+        }
+        speedSaveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 
     func setScreensaver(_ item: ContentItem) {

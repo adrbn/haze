@@ -4,10 +4,22 @@ import Foundation
 public struct ItemSettings: Codable, Hashable, Sendable {
     public var fps: Int          // preferred frame rate (0 = follow display)
     public var scaling: Scaling
+    public var speed: Double      // playback-rate multiplier for video/animated (1.0 = normal)
 
-    public init(fps: Int = 0, scaling: Scaling = .fill) {
+    public init(fps: Int = 0, scaling: Scaling = .fill, speed: Double = 1.0) {
         self.fps = fps
         self.scaling = scaling
+        self.speed = speed
+    }
+
+    enum CodingKeys: String, CodingKey { case fps, scaling, speed }
+
+    /// Tolerant decode so items saved before `speed` existed still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fps = (try? c.decode(Int.self, forKey: .fps)) ?? 0
+        scaling = (try? c.decode(Scaling.self, forKey: .scaling)) ?? .fill
+        speed = (try? c.decode(Double.self, forKey: .speed)) ?? 1.0
     }
 }
 

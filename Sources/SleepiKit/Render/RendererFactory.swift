@@ -7,7 +7,7 @@ public enum RendererFactory {
         switch item.type {
         case .video:
             guard let url = item.fileURL else { return nil }
-            return VideoRenderer(url: url, scaling: item.settings.scaling)
+            return VideoRenderer(url: url, scaling: item.settings.scaling, rate: item.settings.speed)
         case .animatedImage:
             guard let url = item.fileURL else { return nil }
             return AnimatedImageRenderer(url: url, scaling: item.settings.scaling)

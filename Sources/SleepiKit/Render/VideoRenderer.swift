@@ -31,10 +31,11 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
     private let player: AVQueuePlayer
     private let asset: AVURLAsset
     private var looper: AVPlayerLooper?
+    private var playbackRate: Float
 
     public var view: NSView { hostView }
 
-    public init?(url: URL, scaling: Scaling) {
+    public init?(url: URL, scaling: Scaling, rate: Double = 1.0) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             Log.render.error("Video file missing: \(url.lastPathComponent, privacy: .public)")
             return nil
@@ -47,6 +48,7 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         queue.automaticallyWaitsToMinimizeStalling = false
         self.asset = asset
         self.player = queue
+        self.playbackRate = max(Float(rate), 0.1)
         self.hostView = PlayerHostView(player: queue, gravity: scaling.videoGravity)
         super.init()
         primeLooperIfNeeded()
@@ -59,14 +61,19 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
 
     public func start() {
         primeLooperIfNeeded()   // tolerate start() after a prior stop()
-        player.play()
+        player.rate = playbackRate   // setting rate > 0 begins playback at that speed
     }
     public func pause() { player.pause() }
-    public func resume() { player.play() }
+    public func resume() { player.rate = playbackRate }
     public func stop() {
         player.pause()
         player.removeAllItems()
         looper = nil
+    }
+
+    public func liveUpdate(_ item: ContentItem) {
+        playbackRate = max(Float(item.settings.speed), 0.1)
+        if player.rate != 0 { player.rate = playbackRate }   // adjust in place if playing
     }
 
     deinit { player.pause() }
