@@ -24,6 +24,10 @@ final class AppModel: ObservableObject {
         library.seedDefaultsIfNeeded()
         seedShaderPresets()
         items = library.items
+        // Reconcile launch-at-login with the saved intent, re-registering against
+        // THIS bundle — so a copy moved into /Applications updates a stale login
+        // item that still pointed at an old (e.g. build-folder) location.
+        LaunchAtLogin.setEnabled(settings.launchAtLogin)
         settings.launchAtLogin = LaunchAtLogin.isEnabled
         syncCurrentSpeed()
     }
