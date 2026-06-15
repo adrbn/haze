@@ -49,7 +49,7 @@ struct GradientEditorView: View {
                     slider("Warp", $config.warp, 0...2)
                     slider("Grain", $config.grain, 0...1)
                     slider("Blur", $config.blur, 0...1)
-                    slider("Brightness", $config.brightness, 0.6...1.4)
+                    slider("Brightness", $config.brightness, 0.5...1.5)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Frame rate").font(.headline)

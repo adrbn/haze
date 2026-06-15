@@ -93,8 +93,16 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
         mtkView.framebufferOnly = config.blur <= 0
+        if config.blur <= 0 { releaseBlurResources() }
         updateColors()
         updateClearColor()
+    }
+
+    private func releaseBlurResources() {
+        sceneTexture = nil
+        sceneDepth = nil
+        blurKernel = nil
+        blurSigma = -1
     }
 
     public func liveUpdate(_ item: ContentItem) {
@@ -208,9 +216,9 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         let elapsed = Float(CACurrentMediaTime() - startTime)
         var uniforms = makeUniforms(time: elapsed, drawableSize: view.drawableSize)
 
-        let sigma = Float(max(config.blur, 0)) * 36.0
-        if sigma >= 0.5, let scene = sceneTextures(size: view.drawableSize) {
+        if config.blur > 0, let scene = sceneTextures(size: view.drawableSize) {
             // Render to an offscreen texture, then Gaussian-blur it to the drawable.
+            let sigma = max(Float(config.blur) * 36.0, 0.5)
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = scene.color
             pass.colorAttachments[0].loadAction = .clear
@@ -220,7 +228,10 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             pass.depthAttachment.loadAction = .clear
             pass.depthAttachment.clearDepth = 1.0
             pass.depthAttachment.storeAction = .dontCare
-            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
+                commandBuffer.commit()   // release the drawable back to the pool
+                return
+            }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, depthState: depthState,
                            vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, colorBuffer: colorBuffer)
             if blurKernel == nil || blurSigma != sigma {
@@ -234,7 +245,10 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             commandBuffer.commit()
         } else {
             guard let passDescriptor = view.currentRenderPassDescriptor,
-                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
+                commandBuffer.commit()
+                return
+            }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, depthState: depthState,
                            vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, colorBuffer: colorBuffer)
             commandBuffer.present(drawable)

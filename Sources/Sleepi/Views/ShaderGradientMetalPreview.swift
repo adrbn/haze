@@ -25,13 +25,14 @@ struct ShaderGradientMetalPreview: NSViewRepresentable {
             ])
             renderer.setExternallyDriven(true)
             renderer.start()
-            context.coordinator.startTimer()
+            context.coordinator.startTimer(fps: config.fps)
         }
         return container
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.renderer?.update(config: config)
+        context.coordinator.startTimer(fps: config.fps)
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -43,10 +44,14 @@ struct ShaderGradientMetalPreview: NSViewRepresentable {
     final class Coordinator {
         var renderer: ShaderGradientRenderer?
         private var timer: Timer?
+        private var fps = 0
 
-        func startTimer() {
+        func startTimer(fps requested: Int) {
+            let clamped = min(max(requested > 0 ? requested : 30, 1), 60)
+            if timer != nil, clamped == fps { return }
+            fps = clamped
             timer?.invalidate()
-            let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            let t = Timer(timeInterval: 1.0 / Double(clamped), repeats: true) { [weak self] _ in
                 self?.renderer?.tick()
             }
             RunLoop.main.add(t, forMode: .common)

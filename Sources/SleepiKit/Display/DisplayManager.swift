@@ -91,6 +91,14 @@ public final class DisplayManager {
         }
         lastScreenConfig = NSScreen.screens.map(\.frame)
         Log.display.info("Applied '\(item.name, privacy: .public)' to \(self.entries.count, privacy: .public) screen(s)")
+
+        // Guarantee an initial frame is presented, even if the renderer was
+        // created while paused (launched behind other windows / occluded). Run
+        // on the next runloop turns so the view is laid out and the drawable is
+        // ready — otherwise a paused wallpaper stays blank until interaction.
+        let created = entries
+        DispatchQueue.main.async { created.forEach { $0.renderer.redraw() } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { created.forEach { $0.renderer.redraw() } }
     }
 
     private func teardown() {

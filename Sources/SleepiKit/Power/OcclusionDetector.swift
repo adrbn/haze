@@ -40,6 +40,8 @@ public final class OcclusionDetector {
     }
 
     public func stop() {
+        pendingReeval?.cancel()
+        pendingReeval = nil
         for token in tokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             NotificationCenter.default.removeObserver(token)
@@ -48,6 +50,7 @@ public final class OcclusionDetector {
     }
 
     deinit {
+        pendingReeval?.cancel()
         for token in tokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
             NotificationCenter.default.removeObserver(token)

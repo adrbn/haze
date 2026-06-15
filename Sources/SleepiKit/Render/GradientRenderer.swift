@@ -65,7 +65,14 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
         mtkView.framebufferOnly = config.blur <= 0
+        if config.blur <= 0 { releaseBlurResources() }
         updateColors()
+    }
+
+    private func releaseBlurResources() {
+        sceneTexture = nil
+        blurKernel = nil
+        blurSigma = -1
     }
 
     public func setFPSCap(_ cap: Int) {
@@ -145,14 +152,17 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             colorCount: resolvedColorCount,
             style: Int32(config.style.shaderIndex))
 
-        let sigma = Float(max(config.blur, 0)) * 36.0
-        if sigma >= 0.5, let scene = sceneColorTexture(size: size) {
+        if config.blur > 0, let scene = sceneColorTexture(size: size) {
+            let sigma = max(Float(config.blur) * 36.0, 0.5)
             let pass = MTLRenderPassDescriptor()
             pass.colorAttachments[0].texture = scene
             pass.colorAttachments[0].loadAction = .clear
             pass.colorAttachments[0].clearColor = view.clearColor
             pass.colorAttachments[0].storeAction = .store
-            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
+                commandBuffer.commit()
+                return
+            }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
             if blurKernel == nil || blurSigma != sigma {
                 let kernel = MPSImageGaussianBlur(device: device, sigma: sigma)
@@ -165,7 +175,10 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             commandBuffer.commit()
         } else {
             guard let passDescriptor = view.currentRenderPassDescriptor,
-                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
+                commandBuffer.commit()
+                return
+            }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
             commandBuffer.present(drawable)
             commandBuffer.commit()
