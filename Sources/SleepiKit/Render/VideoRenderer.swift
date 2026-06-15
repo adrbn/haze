@@ -1,37 +1,36 @@
 import AppKit
 import AVFoundation
-import CoreVideo
 
-/// Layer-backed view whose `layer.contents` is set directly from decoded frames.
-final class VideoHostView: NSView {
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+/// Layer-backed view that hosts an `AVPlayerLayer` and keeps it sized to bounds.
+final class PlayerHostView: NSView {
+    let playerLayer = AVPlayerLayer()
+
+    init(player: AVPlayer, gravity: AVLayerVideoGravity) {
+        super.init(frame: .zero)
         wantsLayer = true
         let root = CALayer()
         root.backgroundColor = NSColor.black.cgColor
         layer = root
+        playerLayer.player = player
+        playerLayer.videoGravity = gravity
+        playerLayer.frame = bounds
+        root.addSublayer(playerLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    override func layout() {
+        super.layout()
+        playerLayer.frame = bounds
+    }
 }
 
-/// Seamless looping video with hardware decode and no audio by default.
-///
-/// Frames are pulled with `AVPlayerItemVideoOutput` and presented on a display
-/// link, instead of letting an `AVPlayerLayer` present itself. macOS throttles a
-/// background/desktop `AVPlayerLayer` (it drops a 30fps clip to ~18fps on the
-/// desktop even though decode is ~1% CPU); driving presentation off the display
-/// link keeps it at full frame rate. In the sandboxed screensaver host — where
-/// the view's display link may not fire — `tick()` presents instead.
+/// Seamless looping video playback with hardware decode and no audio.
 public final class VideoRenderer: NSObject, WallpaperRenderer {
-    private let hostView: VideoHostView
+    private let hostView: PlayerHostView
     private let player: AVQueuePlayer
     private let asset: AVURLAsset
     private var looper: AVPlayerLooper?
-    private let output: AVPlayerItemVideoOutput
-    private var displayLink: CVDisplayLink?
-    private var itemObservation: NSKeyValueObservation?
-    private weak var outputItem: AVPlayerItem?
     private var playbackRate: Float
 
     public var view: NSView { hostView }
@@ -49,21 +48,10 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         queue.automaticallyWaitsToMinimizeStalling = false
         self.asset = asset
         self.player = queue
-        self.output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
-            kCVPixelBufferMetalCompatibilityKey as String: true,
-        ])
         self.playbackRate = VideoRenderer.clampRate(rate)
-        let host = VideoHostView(frame: .zero)
-        host.layer?.contentsGravity = scaling.contentsGravity
-        self.hostView = host
+        self.hostView = PlayerHostView(player: queue, gravity: scaling.videoGravity)
         super.init()
         primeLooperIfNeeded()
-        attachOutputToCurrentItem()
-        // The looper swaps in a fresh item each loop; move our output onto it.
-        itemObservation = queue.observe(\.currentItem) { [weak self] _, _ in
-            self?.attachOutputToCurrentItem()
-        }
     }
 
     private func primeLooperIfNeeded() {
@@ -71,88 +59,17 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(asset: asset))
     }
 
-    private func attachOutputToCurrentItem() {
-        guard let item = player.currentItem, item !== outputItem else { return }
-        if let previous = outputItem, previous.outputs.contains(output) { previous.remove(output) }
-        item.add(output)
-        outputItem = item
-    }
-
-    // MARK: Presentation
-
-    private func startDisplayLink() {
-        guard displayLink == nil else { return }
-        // CVDisplayLink (display-tied) fires reliably for desktop-level windows,
-        // unlike NSView's CADisplayLink — same mechanism MTKView uses internally.
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-        CVDisplayLinkSetOutputHandler(link) { [weak self] _, _, inOutputTime, _, _ in
-            // Map the *upcoming vsync* to an item time and present it on this
-            // thread — no hop to main, so frame selection stays synced to the
-            // display (clean 2:2 cadence for 30fps on a 60Hz panel).
-            guard let self else { return kCVReturnSuccess }
-            self.present(forItemTime: self.output.itemTime(for: inOutputTime.pointee))
-            return kCVReturnSuccess
-        }
-        CVDisplayLinkStart(link)
-        displayLink = link
-    }
-
-    private func stopDisplayLink() {
-        if let displayLink { CVDisplayLinkStop(displayLink) }
-        displayLink = nil
-    }
-
-    /// Copy the decoded frame for `time` into the layer if a new one is ready.
-    /// Safe off-main (Core Animation accepts an explicit transaction from any
-    /// thread); the layer is only mutated here once playing.
-    private func present(forItemTime time: CMTime) {
-        guard output.hasNewPixelBuffer(forItemTime: time),
-              let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil)
-        else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        hostView.layer?.contents = buffer
-        CATransaction.commit()
-    }
-
-    /// Present whatever frame matches "now" — used by start()/tick()/redraw().
-    private func presentCurrent() {
-        present(forItemTime: output.itemTime(forHostTime: CACurrentMediaTime()))
-    }
-
-    // MARK: WallpaperRenderer
-
     public func start() {
-        primeLooperIfNeeded()
-        attachOutputToCurrentItem()
-        player.rate = playbackRate   // rate > 0 begins playback
-        startDisplayLink()
-        presentCurrent()
+        primeLooperIfNeeded()   // tolerate start() after a prior stop()
+        player.rate = playbackRate   // setting rate > 0 begins playback at that speed
     }
-
-    public func pause() {
-        player.pause()
-        stopDisplayLink()
-    }
-
-    public func resume() {
-        player.rate = playbackRate
-        startDisplayLink()
-    }
-
+    public func pause() { player.pause() }
+    public func resume() { player.rate = playbackRate }
     public func stop() {
-        stopDisplayLink()
         player.pause()
         player.removeAllItems()
         looper = nil
-        outputItem = nil
     }
-
-    /// Screensaver-host fallback (its view's display link may not fire).
-    public func tick() { presentCurrent() }
-    public func redraw() { presentCurrent() }
 
     public func liveUpdate(_ item: ContentItem) {
         playbackRate = VideoRenderer.clampRate(item.settings.speed)
@@ -164,9 +81,5 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         min(max(Float(rate), 0.25), 2.0)
     }
 
-    deinit {
-        itemObservation?.invalidate()
-        if let displayLink { CVDisplayLinkStop(displayLink) }
-        player.pause()
-    }
+    deinit { player.pause() }
 }
