@@ -47,6 +47,13 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// Edge for the floating nav bar (used only when `navLayout == .bar`).
     public var barEdge: BarEdge
 
+    /// Also set a matching static still as the macOS desktop picture, so Mission
+    /// Control / lock / login show something consistent with the live wallpaper.
+    public var matchSystemWallpaper: Bool
+    /// The user's desktop picture captured before Sleepi first overwrote it, so
+    /// it can be restored when the feature is turned off. `nil` until captured.
+    public var savedSystemWallpaperPath: String?
+
     public init(version: Int = AppSettings.currentVersion,
                 wallpaperItemID: UUID? = nil,
                 screensaverItemID: UUID? = nil,
@@ -60,7 +67,9 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 favoriteItemIDs: [String] = [],
                 videoSoundEnabled: Bool = false,
                 navLayout: NavLayout = .sidebar,
-                barEdge: BarEdge = .top) {
+                barEdge: BarEdge = .top,
+                matchSystemWallpaper: Bool = true,
+                savedSystemWallpaperPath: String? = nil) {
         self.version = version
         self.wallpaperItemID = wallpaperItemID
         self.screensaverItemID = screensaverItemID
@@ -75,6 +84,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.videoSoundEnabled = videoSoundEnabled
         self.navLayout = navLayout
         self.barEdge = barEdge
+        self.matchSystemWallpaper = matchSystemWallpaper
+        self.savedSystemWallpaperPath = savedSystemWallpaperPath
     }
 
     public static let `default` = AppSettings()
@@ -97,5 +108,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         videoSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .videoSoundEnabled) ?? d.videoSoundEnabled
         navLayout = try c.decodeIfPresent(NavLayout.self, forKey: .navLayout) ?? d.navLayout
         barEdge = try c.decodeIfPresent(BarEdge.self, forKey: .barEdge) ?? d.barEdge
+        matchSystemWallpaper = try c.decodeIfPresent(Bool.self, forKey: .matchSystemWallpaper) ?? d.matchSystemWallpaper
+        savedSystemWallpaperPath = try c.decodeIfPresent(String.self, forKey: .savedSystemWallpaperPath)
     }
 }

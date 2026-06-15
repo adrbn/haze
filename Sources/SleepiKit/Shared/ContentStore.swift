@@ -42,6 +42,9 @@ public enum ContentStore {
 
     public static var mediaURL: URL { rootURL.appendingPathComponent("Media", isDirectory: true) }
     public static var thumbnailsURL: URL { rootURL.appendingPathComponent("Thumbnails", isDirectory: true) }
+    /// Static "poster" stills written here and set as the macOS desktop picture,
+    /// so Mission Control / lock / login match the live wallpaper.
+    public static var postersURL: URL { rootURL.appendingPathComponent("Posters", isDirectory: true) }
     public static var manifestURL: URL { rootURL.appendingPathComponent("library.json", isDirectory: false) }
     public static var settingsURL: URL { rootURL.appendingPathComponent("settings.json", isDirectory: false) }
 
@@ -50,7 +53,7 @@ public enum ContentStore {
     public static func ensureDirectories() -> Bool {
         let fm = FileManager.default
         do {
-            for dir in [rootURL, mediaURL, thumbnailsURL] {
+            for dir in [rootURL, mediaURL, thumbnailsURL, postersURL] {
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             }
             return true

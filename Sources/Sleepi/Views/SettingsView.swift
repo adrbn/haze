@@ -21,6 +21,10 @@ struct SettingsView: View {
                             Text("Bottom").tag(BarEdge.bottom)
                         }
                     }
+                    Toggle("Match macOS wallpaper", isOn: boolBinding(\.matchSystemWallpaper))
+                    Text("Sets a matching still as your macOS desktop picture so Mission Control, lock and login screens match the live wallpaper.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Performance") {

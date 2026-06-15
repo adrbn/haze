@@ -58,6 +58,7 @@ final class AppModel: ObservableObject {
             persist()
         }
         syncCurrentSpeed()
+        syncSystemWallpaper()
     }
 
     // MARK: Derived
@@ -83,6 +84,19 @@ final class AppModel: ObservableObject {
         wallpaper.apply(item: item, settings: settings)
         persist()
         currentWallpaperSpeed = speed(of: item)
+        syncSystemWallpaper()
+    }
+
+    /// Keep the macOS desktop picture in sync with the live wallpaper (for
+    /// Mission Control / lock / login), capturing the user's original once.
+    private func syncSystemWallpaper() {
+        guard settings.matchSystemWallpaper, let item = currentWallpaper else { return }
+        let captured = SystemWallpaper.captureOriginal(settings)
+        if captured.savedSystemWallpaperPath != settings.savedSystemWallpaperPath {
+            settings = captured
+            persist()
+        }
+        SystemWallpaper.apply(for: item)
     }
 
     // MARK: Speed control (sidebar slider)
@@ -179,6 +193,7 @@ final class AppModel: ObservableObject {
         if settings.wallpaperItemID == item.id {
             wallpaper.apply(item: item, settings: settings)
             syncCurrentSpeed()
+            syncSystemWallpaper()
         }
     }
 
@@ -207,6 +222,7 @@ final class AppModel: ObservableObject {
             settings.wallpaperItemID = items.first?.id
             if let next = currentWallpaper {
                 wallpaper.apply(item: next, settings: settings)
+                syncSystemWallpaper()
             } else {
                 wallpaper.clear()
             }
@@ -221,6 +237,7 @@ final class AppModel: ObservableObject {
     func updateSettings(_ newSettings: AppSettings) {
         let launchChanged = newSettings.launchAtLogin != settings.launchAtLogin
         let soundChanged = newSettings.videoSoundEnabled != settings.videoSoundEnabled
+        let matchChanged = newSettings.matchSystemWallpaper != settings.matchSystemWallpaper
         settings = newSettings
         wallpaper.updateSettings(newSettings)
         if launchChanged { LaunchAtLogin.setEnabled(newSettings.launchAtLogin) }
@@ -228,6 +245,13 @@ final class AppModel: ObservableObject {
             wallpaper.apply(item: current, settings: settings)   // rebuild video with new mute state
         }
         persist()
+        if matchChanged {
+            if newSettings.matchSystemWallpaper {
+                syncSystemWallpaper()
+            } else {
+                SystemWallpaper.restore(savedPath: newSettings.savedSystemWallpaperPath)
+            }
+        }
     }
 
     // MARK: Favorites
