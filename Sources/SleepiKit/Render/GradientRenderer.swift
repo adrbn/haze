@@ -45,7 +45,10 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         mtkView.framebufferOnly = true   // MPS writes an offscreen; the drawable is only a render target
         mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
-        mtkView.layer?.isOpaque = true
+        // Non-opaque layer so Mission Control (which can't snapshot Metal) shows
+        // the matching system poster through instead of black. Frames are opaque
+        // (clearColor alpha = 1), so normal viewing is unchanged.
+        mtkView.layer?.isOpaque = false
         mtkView.enableSetNeedsDisplay = false
         mtkView.isPaused = true
         mtkView.preferredFramesPerSecond = effectiveFPS

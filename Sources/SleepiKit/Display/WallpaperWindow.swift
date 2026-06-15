@@ -10,8 +10,13 @@ public final class WallpaperWindow: NSWindow {
                    backing: .buffered,
                    defer: false)
 
-        isOpaque = true
-        backgroundColor = .black
+        // Non-opaque with a clear background: the live Metal content is opaque so
+        // normal viewing is unaffected, but Mission Control / the Spaces switcher
+        // can't snapshot a Metal drawable and would otherwise show this window's
+        // black backing. Clear lets the matching system "poster" picture show
+        // through there instead of black.
+        isOpaque = false
+        backgroundColor = .clear
         hasShadow = false
         ignoresMouseEvents = true
         isMovable = false

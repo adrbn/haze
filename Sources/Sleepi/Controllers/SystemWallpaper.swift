@@ -21,16 +21,17 @@ enum SystemWallpaper {
         return updated
     }
 
-    /// Generate a poster for `item` and set it as the desktop picture on every
-    /// screen. Heavy work (frame extraction / drawing) runs off the main thread.
-    /// `then` runs on the main actor after the picture is set — used to re-raise
-    /// the live wallpaper windows back above the (just-changed) system picture.
-    static func apply(for item: ContentItem, then: (@MainActor @Sendable () -> Void)? = nil) {
+    /// Generate a poster for `item` off the main thread, optionally set it as the
+    /// macOS desktop picture, and hand the poster URL back on the main actor (so
+    /// it can be shown behind the live Metal view as a snapshot-able fallback).
+    static func apply(for item: ContentItem,
+                      setSystemPicture: Bool,
+                      then: (@MainActor @Sendable (URL?) -> Void)? = nil) {
         Task.detached(priority: .utility) {
-            guard let posterURL = makePoster(for: item) else { return }
+            let posterURL = makePoster(for: item)
             await MainActor.run {
-                setDesktopPicture(posterURL)
-                then?()
+                if setSystemPicture, let posterURL { setDesktopPicture(posterURL) }
+                then?(posterURL)
             }
         }
     }

@@ -87,16 +87,25 @@ final class AppModel: ObservableObject {
         syncSystemWallpaper()
     }
 
-    /// Keep the macOS desktop picture in sync with the live wallpaper (for
-    /// Mission Control / lock / login), capturing the user's original once.
+    /// Generate the wallpaper poster. It's always shown behind the live Metal
+    /// view (so Space swipes / Mission Control aren't black), and — when the user
+    /// opts in — also set as the macOS desktop picture (for lock / login),
+    /// capturing their original once so it can be restored.
     private func syncSystemWallpaper() {
-        guard settings.matchSystemWallpaper, let item = currentWallpaper else { return }
-        let captured = SystemWallpaper.captureOriginal(settings)
-        if captured.savedSystemWallpaperPath != settings.savedSystemWallpaperPath {
-            settings = captured
-            persist()
+        guard let item = currentWallpaper else { return }
+        let setSystem = settings.matchSystemWallpaper
+        if setSystem {
+            let captured = SystemWallpaper.captureOriginal(settings)
+            if captured.savedSystemWallpaperPath != settings.savedSystemWallpaperPath {
+                settings = captured
+                persist()
+            }
         }
-        SystemWallpaper.apply(for: item) { [weak self] in self?.reassertWallpaperWindows() }
+        SystemWallpaper.apply(for: item, setSystemPicture: setSystem) { [weak self] url in
+            guard let self else { return }
+            self.wallpaper.setFallbackImage(url)
+            if setSystem { self.reassertWallpaperWindows() }
+        }
     }
 
     /// macOS layers its desktop picture above our desktop-level windows when it

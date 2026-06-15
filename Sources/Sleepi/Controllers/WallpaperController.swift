@@ -50,6 +50,10 @@ final class WallpaperController {
     /// on top of our desktop-level windows.
     func reassert() { display.reassertWindows() }
 
+    /// The static poster shown behind the Metal view (for Space transitions /
+    /// Mission Control, where Metal can't be snapshotted).
+    func setFallbackImage(_ url: URL?) { display.setFallbackImage(url) }
+
     var isUserPaused: Bool { power?.isUserPaused ?? false }
 
     func clear() { display.clear() }
