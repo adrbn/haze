@@ -1,5 +1,6 @@
 import AppKit
 import MetalKit
+import MetalPerformanceShaders
 import QuartzCore
 import simd
 
@@ -39,6 +40,12 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
 
+    // Gaussian blur post-process (only used when config.blur > 0).
+    private var sceneTexture: MTLTexture?
+    private var sceneDepth: MTLTexture?
+    private var blurKernel: MPSImageGaussianBlur?
+    private var blurSigma: Float = -1
+
     private static let grid = 160   // plane subdivisions
 
     public var view: NSView { mtkView }
@@ -60,7 +67,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         mtkView.depthStencilPixelFormat = .depth32Float
         mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         mtkView.clearDepth = 1.0
-        mtkView.framebufferOnly = true
+        mtkView.framebufferOnly = config.blur <= 0   // false lets MPS write the drawable
         mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
         mtkView.layer?.isOpaque = true
@@ -85,6 +92,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     public func update(config: ShaderGradientConfig) {
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
+        mtkView.framebufferOnly = config.blur <= 0
         updateColors()
         updateClearColor()
     }
@@ -92,6 +100,8 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     public func liveUpdate(_ item: ContentItem) {
         if let config = item.shaderGradient { update(config: config) }
     }
+
+    public func redraw() { mtkView.draw() }
 
     /// Clear to a blend of the gradient's own colours so any uncovered edge
     /// reads as part of the gradient instead of black.
@@ -192,14 +202,53 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         guard let pipeline, let depthState, let colorBuffer,
               let vertexBuffer, let indexBuffer,
               let drawable = view.currentDrawable,
-              let passDescriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+              let commandBuffer = commandQueue.makeCommandBuffer() else { return }
 
         if startTime == 0 { startTime = CACurrentMediaTime() }
         let elapsed = Float(CACurrentMediaTime() - startTime)
         var uniforms = makeUniforms(time: elapsed, drawableSize: view.drawableSize)
 
+        let sigma = Float(max(config.blur, 0)) * 36.0
+        if sigma >= 0.5, let scene = sceneTextures(size: view.drawableSize) {
+            // Render to an offscreen texture, then Gaussian-blur it to the drawable.
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = scene.color
+            pass.colorAttachments[0].loadAction = .clear
+            pass.colorAttachments[0].clearColor = view.clearColor
+            pass.colorAttachments[0].storeAction = .store
+            pass.depthAttachment.texture = scene.depth
+            pass.depthAttachment.loadAction = .clear
+            pass.depthAttachment.clearDepth = 1.0
+            pass.depthAttachment.storeAction = .dontCare
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+            encodeGradient(encoder, &uniforms, pipeline: pipeline, depthState: depthState,
+                           vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, colorBuffer: colorBuffer)
+            if blurKernel == nil || blurSigma != sigma {
+                let kernel = MPSImageGaussianBlur(device: device, sigma: sigma)
+                kernel.edgeMode = .clamp
+                blurKernel = kernel
+                blurSigma = sigma
+            }
+            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene.color, destinationTexture: drawable.texture)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        } else {
+            guard let passDescriptor = view.currentRenderPassDescriptor,
+                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+            encodeGradient(encoder, &uniforms, pipeline: pipeline, depthState: depthState,
+                           vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, colorBuffer: colorBuffer)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        }
+    }
+
+    private func encodeGradient(_ encoder: MTLRenderCommandEncoder,
+                                _ uniforms: inout SGUniforms,
+                                pipeline: MTLRenderPipelineState,
+                                depthState: MTLDepthStencilState,
+                                vertexBuffer: MTLBuffer,
+                                indexBuffer: MTLBuffer,
+                                colorBuffer: MTLBuffer) {
         encoder.setRenderPipelineState(pipeline)
         encoder.setDepthStencilState(depthState)
         encoder.setCullMode(.none)
@@ -210,8 +259,23 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         encoder.drawIndexedPrimitives(type: .triangle, indexCount: indexCount,
                                       indexType: .uint32, indexBuffer: indexBuffer, indexBufferOffset: 0)
         encoder.endEncoding()
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+    }
+
+    /// Offscreen colour + depth textures matching the drawable size (recreated on resize).
+    private func sceneTextures(size: CGSize) -> (color: MTLTexture, depth: MTLTexture)? {
+        let w = Int(size.width), h = Int(size.height)
+        guard w > 0, h > 0 else { return nil }
+        if let c = sceneTexture, let d = sceneDepth, c.width == w, c.height == h { return (c, d) }
+        let cdesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: mtkView.colorPixelFormat, width: w, height: h, mipmapped: false)
+        cdesc.usage = [.renderTarget, .shaderRead]
+        cdesc.storageMode = .private
+        let ddesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float, width: w, height: h, mipmapped: false)
+        ddesc.usage = [.renderTarget]
+        ddesc.storageMode = .private
+        guard let c = device.makeTexture(descriptor: cdesc), let d = device.makeTexture(descriptor: ddesc) else { return nil }
+        sceneTexture = c
+        sceneDepth = d
+        return (c, d)
     }
 
     private func makeUniforms(time: Float, drawableSize: CGSize) -> SGUniforms {

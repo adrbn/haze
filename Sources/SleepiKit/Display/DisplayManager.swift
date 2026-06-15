@@ -54,7 +54,14 @@ public final class DisplayManager {
     public func setRendering(_ on: Bool) {
         guard rendering != on else { return }
         rendering = on
-        for entry in entries { on ? entry.renderer.resume() : entry.renderer.pause() }
+        for entry in entries {
+            if on {
+                entry.renderer.resume()
+                entry.renderer.redraw()   // show the revealed frame immediately
+            } else {
+                entry.renderer.pause()
+            }
+        }
         Log.display.debug("rendering set to \(on, privacy: .public)")
     }
 

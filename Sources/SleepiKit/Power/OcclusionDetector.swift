@@ -10,18 +10,33 @@ public final class OcclusionDetector {
     public private(set) var currentlyOccluded = false
 
     private var tokens: [NSObjectProtocol] = []
+    private var pendingReeval: DispatchWorkItem?
 
     public init() {}
 
     public func start() {
         let ws = NSWorkspace.shared.notificationCenter
         tokens.append(ws.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
-                                     object: nil, queue: .main) { [weak self] _ in self?.evaluate() })
+                                     object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() })
         tokens.append(ws.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification,
-                                     object: nil, queue: .main) { [weak self] _ in self?.evaluate() })
+                                     object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() })
         tokens.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
-                                     object: nil, queue: .main) { [weak self] _ in self?.evaluate() })
+                                     object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() })
+        // Window visibility changes (Mission Control / swipe-to-desktop) — the
+        // signal that the wallpaper became visible again.
+        tokens.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                                     object: nil, queue: .main) { [weak self] _ in self?.scheduleEvaluate() })
         evaluate()
+    }
+
+    /// Evaluate now, then again shortly after — Space/Mission-Control transitions
+    /// settle asynchronously, so the immediate read can still see stale coverage.
+    private func scheduleEvaluate() {
+        evaluate()
+        pendingReeval?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.evaluate() }
+        pendingReeval = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
     }
 
     public func stop() {

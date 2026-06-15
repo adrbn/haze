@@ -61,6 +61,7 @@ struct ShaderGradientEditorView: View {
                     slider("Strength", $config.strength, 0...8)
                     slider("Amplitude", $config.amplitude, 0...3)
                     slider("Grain", $config.grain, 0...1)
+                    slider("Blur", $config.blur, 0...1)
                     slider("Brightness", $config.brightness, 0.6...2)
                     slider("Roll", $config.rotationZ, 0...360)
 

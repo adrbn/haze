@@ -47,7 +47,8 @@ struct GradientEditorView: View {
 
                     slider("Speed", $config.speed, 0...2)
                     slider("Warp", $config.warp, 0...2)
-                    slider("Grain", $config.grain, 0...0.5)
+                    slider("Grain", $config.grain, 0...1)
+                    slider("Blur", $config.blur, 0...1)
                     slider("Brightness", $config.brightness, 0.6...1.4)
 
                     VStack(alignment: .leading, spacing: 6) {

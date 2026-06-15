@@ -142,7 +142,7 @@ fragment float4 sg_fragment(SGOut in [[stage_in]],
     // Film grain.
     if (u.grain > 0.001) {
         float g = sg_hash(in.position.xy + floor(u.time * 24.0) * 17.0) - 0.5;
-        col += g * u.grain * 0.08;
+        col += g * u.grain * 0.16;
     }
 
     return float4(clamp(col, 0.0, 1.0), 1.0);

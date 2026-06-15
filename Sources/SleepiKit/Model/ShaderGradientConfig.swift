@@ -42,6 +42,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
     // Look
     public var brightness: Double
     public var grain: Double         // 0 = off
+    public var blur: Double          // 0 = sharp; gaussian softening
     public var reflection: Double
 
     // Camera (spherical) + lens
@@ -69,6 +70,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
                 strength: Double = 4.0,
                 brightness: Double = 1.2,
                 grain: Double = 1.0,
+                blur: Double = 0.0,
                 reflection: Double = 0.1,
                 cPolarAngle: Double = 90,
                 cAzimuthAngle: Double = 180,
@@ -90,6 +92,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
         self.strength = strength
         self.brightness = brightness
         self.grain = grain
+        self.blur = blur
         self.reflection = reflection
         self.cPolarAngle = cPolarAngle
         self.cAzimuthAngle = cAzimuthAngle
@@ -113,7 +116,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case colors, type, speed, density, frequency, amplitude, strength
-        case brightness, grain, reflection
+        case brightness, grain, blur, reflection
         case cPolarAngle, cAzimuthAngle, cDistance, fov
         case positionX, positionY, positionZ, rotationX, rotationY, rotationZ, fps
     }
@@ -131,6 +134,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
         strength = (try? c.decode(Double.self, forKey: .strength)) ?? d.strength
         brightness = (try? c.decode(Double.self, forKey: .brightness)) ?? d.brightness
         grain = (try? c.decode(Double.self, forKey: .grain)) ?? d.grain
+        blur = (try? c.decode(Double.self, forKey: .blur)) ?? d.blur
         reflection = (try? c.decode(Double.self, forKey: .reflection)) ?? d.reflection
         cPolarAngle = (try? c.decode(Double.self, forKey: .cPolarAngle)) ?? d.cPolarAngle
         cAzimuthAngle = (try? c.decode(Double.self, forKey: .cAzimuthAngle)) ?? d.cAzimuthAngle

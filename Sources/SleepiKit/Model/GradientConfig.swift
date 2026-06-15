@@ -63,6 +63,7 @@ public struct GradientConfig: Codable, Hashable, Sendable {
     public var grain: Double         // 0...1, film grain amount
     public var warp: Double          // 0...2, domain-warp intensity
     public var brightness: Double    // 0.5...1.5
+    public var blur: Double          // 0 = sharp; gaussian softening
     public var style: GradientStyle
     public var fps: Int              // preferred render rate
 
@@ -71,6 +72,7 @@ public struct GradientConfig: Codable, Hashable, Sendable {
                 grain: Double = 0.12,
                 warp: Double = 1.0,
                 brightness: Double = 1.0,
+                blur: Double = 0.0,
                 style: GradientStyle = .aurora,
                 fps: Int = 30) {
         self.colors = colors
@@ -78,8 +80,27 @@ public struct GradientConfig: Codable, Hashable, Sendable {
         self.grain = grain
         self.warp = warp
         self.brightness = brightness
+        self.blur = blur
         self.style = style
         self.fps = fps
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case colors, speed, grain, warp, brightness, blur, style, fps
+    }
+
+    /// Tolerant decode so 2D gradients saved before `blur` existed still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = GradientConfig(colors: [RGBAColor(r: 0, g: 0, b: 0), RGBAColor(r: 1, g: 1, b: 1)])
+        colors = (try? c.decode([RGBAColor].self, forKey: .colors)) ?? d.colors
+        speed = (try? c.decode(Double.self, forKey: .speed)) ?? d.speed
+        grain = (try? c.decode(Double.self, forKey: .grain)) ?? d.grain
+        warp = (try? c.decode(Double.self, forKey: .warp)) ?? d.warp
+        brightness = (try? c.decode(Double.self, forKey: .brightness)) ?? d.brightness
+        blur = (try? c.decode(Double.self, forKey: .blur)) ?? d.blur
+        style = (try? c.decode(GradientStyle.self, forKey: .style)) ?? .aurora
+        fps = (try? c.decode(Int.self, forKey: .fps)) ?? d.fps
     }
 
     /// Clamped, shader-ready colours (always 2...6 entries).

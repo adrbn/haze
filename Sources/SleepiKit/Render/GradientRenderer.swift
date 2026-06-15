@@ -1,5 +1,6 @@
 import AppKit
 import MetalKit
+import MetalPerformanceShaders
 import QuartzCore
 import simd
 
@@ -18,6 +19,11 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
 
+    // Gaussian blur post-process (only used when config.blur > 0).
+    private var sceneTexture: MTLTexture?
+    private var blurKernel: MPSImageGaussianBlur?
+    private var blurSigma: Float = -1
+
     public var view: NSView { mtkView }
 
     public init?(config: GradientConfig, fpsCap: Int = 0) {
@@ -34,7 +40,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         super.init()
 
         mtkView.colorPixelFormat = .bgra8Unorm
-        mtkView.framebufferOnly = true
+        mtkView.framebufferOnly = config.blur <= 0   // false lets MPS write the drawable
         mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
         mtkView.layer?.isOpaque = true
@@ -58,6 +64,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     public func update(config: GradientConfig) {
         self.config = config
         mtkView.preferredFramesPerSecond = effectiveFPS
+        mtkView.framebufferOnly = config.blur <= 0
         updateColors()
     }
 
@@ -69,6 +76,8 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     public func liveUpdate(_ item: ContentItem) {
         if let config = item.gradient { update(config: config) }
     }
+
+    public func redraw() { mtkView.draw() }
 
     private func updateColors() {
         let colors = config.resolvedColors
@@ -119,17 +128,13 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     public func draw(in view: MTKView) {
-        guard let pipeline,
-              let colorBuffer,
+        guard let pipeline, let colorBuffer,
               let drawable = view.currentDrawable,
-              let passDescriptor = view.currentRenderPassDescriptor,
-              let commandBuffer = commandQueue.makeCommandBuffer(),
-              let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+              let commandBuffer = commandQueue.makeCommandBuffer() else { return }
 
         if startTime == 0 { startTime = CACurrentMediaTime() }
         let elapsed = Float(CACurrentMediaTime() - startTime)
         let size = view.drawableSize
-
         var uniforms = GradientUniforms(
             resolution: SIMD2<Float>(Float(size.width), Float(max(size.height, 1))),
             time: elapsed,
@@ -140,13 +145,53 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             colorCount: resolvedColorCount,
             style: Int32(config.style.shaderIndex))
 
+        let sigma = Float(max(config.blur, 0)) * 36.0
+        if sigma >= 0.5, let scene = sceneColorTexture(size: size) {
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = scene
+            pass.colorAttachments[0].loadAction = .clear
+            pass.colorAttachments[0].clearColor = view.clearColor
+            pass.colorAttachments[0].storeAction = .store
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
+            encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
+            if blurKernel == nil || blurSigma != sigma {
+                let kernel = MPSImageGaussianBlur(device: device, sigma: sigma)
+                kernel.edgeMode = .clamp
+                blurKernel = kernel
+                blurSigma = sigma
+            }
+            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene, destinationTexture: drawable.texture)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        } else {
+            guard let passDescriptor = view.currentRenderPassDescriptor,
+                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+            encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        }
+    }
+
+    private func encodeGradient(_ encoder: MTLRenderCommandEncoder,
+                                _ uniforms: inout GradientUniforms,
+                                pipeline: MTLRenderPipelineState,
+                                colorBuffer: MTLBuffer) {
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<GradientUniforms>.stride, index: 0)
         encoder.setFragmentBuffer(colorBuffer, offset: 0, index: 1)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
-        commandBuffer.present(drawable)
-        commandBuffer.commit()
+    }
+
+    private func sceneColorTexture(size: CGSize) -> MTLTexture? {
+        let w = Int(size.width), h = Int(size.height)
+        guard w > 0, h > 0 else { return nil }
+        if let t = sceneTexture, t.width == w, t.height == h { return t }
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: mtkView.colorPixelFormat, width: w, height: h, mipmapped: false)
+        desc.usage = [.renderTarget, .shaderRead]
+        desc.storageMode = .private
+        sceneTexture = device.makeTexture(descriptor: desc)
+        return sceneTexture
     }
 }
 

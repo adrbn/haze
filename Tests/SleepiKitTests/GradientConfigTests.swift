@@ -43,6 +43,16 @@ final class GradientConfigTests: XCTestCase {
         XCTAssertEqual(original, decoded)
     }
 
+    func testTolerantDecodeMissingBlur() throws {
+        // A gradient saved before `blur` existed must still load (blur -> 0).
+        let json = #"{"colors":[{"r":1,"g":0,"b":0,"a":1},{"r":0,"g":0,"b":1,"a":1}],"speed":0.5,"grain":0.1,"warp":1.0,"brightness":1.0,"style":"aurora","fps":30}"#
+            .data(using: .utf8)!
+        let decoded = try JSONStore.decoder.decode(GradientConfig.self, from: json)
+        XCTAssertEqual(decoded.blur, 0)
+        XCTAssertEqual(decoded.style, .aurora)
+        XCTAssertEqual(decoded.colors.count, 2)
+    }
+
     func testPresetsAreUnique() {
         let ids = GradientPresets.all.map(\.id)
         XCTAssertEqual(ids.count, Set(ids).count)

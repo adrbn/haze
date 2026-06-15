@@ -28,6 +28,10 @@ public protocol WallpaperRenderer: AnyObject {
     /// Apply a config change to a live renderer in place (no teardown), used to
     /// tweak the playing wallpaper in real time. Default: no-op.
     func liveUpdate(_ item: ContentItem)
+
+    /// Force one immediate frame — used when the wallpaper is revealed (e.g.
+    /// swipe-to-desktop) so it doesn't appear blank until the next display tick.
+    func redraw()
 }
 
 public extension WallpaperRenderer {
@@ -35,6 +39,7 @@ public extension WallpaperRenderer {
     func setExternallyDriven(_ on: Bool) {}
     func tick() {}
     func liveUpdate(_ item: ContentItem) {}
+    func redraw() {}
 }
 
 extension Scaling {
