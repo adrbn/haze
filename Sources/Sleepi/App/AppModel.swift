@@ -59,6 +59,15 @@ final class AppModel: ObservableObject {
         }
         syncCurrentSpeed()
         syncSystemWallpaper()
+
+        // The desktop window created during launch can miss some Spaces until the
+        // window server settles — so the wallpaper is gone during swipes until the
+        // user re-selects it (which recreates the window). Re-apply once shortly
+        // after launch to bind it to every Space, mimicking that re-select.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self, let current = self.currentWallpaper else { return }
+            self.wallpaper.apply(item: current, settings: self.settings)
+        }
     }
 
     // MARK: Derived
