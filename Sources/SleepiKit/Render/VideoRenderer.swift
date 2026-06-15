@@ -35,15 +35,15 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
 
     public var view: NSView { hostView }
 
-    public init?(url: URL, scaling: Scaling, rate: Double = 1.0) {
+    public init?(url: URL, scaling: Scaling, rate: Double = 1.0, muted: Bool = true) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             Log.render.error("Video file missing: \(url.lastPathComponent, privacy: .public)")
             return nil
         }
         let asset = AVURLAsset(url: url)
         let queue = AVQueuePlayer()
-        queue.isMuted = true
-        queue.volume = 0
+        queue.isMuted = muted
+        queue.volume = muted ? 0 : 1
         queue.actionAtItemEnd = .none
         queue.automaticallyWaitsToMinimizeStalling = false
         self.asset = asset

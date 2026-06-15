@@ -10,6 +10,7 @@ public struct PlaybackPolicy: Equatable, Sendable {
     public var displayAsleep: Bool
     public var systemAsleep: Bool
     public var screenLocked: Bool
+    public var screensaverActive: Bool
     public var onBattery: Bool
     public var lowPowerMode: Bool
 
@@ -24,6 +25,7 @@ public struct PlaybackPolicy: Equatable, Sendable {
                 displayAsleep: Bool = false,
                 systemAsleep: Bool = false,
                 screenLocked: Bool = false,
+                screensaverActive: Bool = false,
                 onBattery: Bool = false,
                 lowPowerMode: Bool = false,
                 pauseWhenOccluded: Bool = true,
@@ -35,6 +37,7 @@ public struct PlaybackPolicy: Equatable, Sendable {
         self.displayAsleep = displayAsleep
         self.systemAsleep = systemAsleep
         self.screenLocked = screenLocked
+        self.screensaverActive = screensaverActive
         self.onBattery = onBattery
         self.lowPowerMode = lowPowerMode
         self.pauseWhenOccluded = pauseWhenOccluded
@@ -48,6 +51,7 @@ public struct PlaybackPolicy: Equatable, Sendable {
         if userPaused { return false }
         if systemAsleep { return false }
         if screenLocked { return false }
+        if screensaverActive { return false }
         if pauseOnDisplaySleep && displayAsleep { return false }
         if pauseWhenOccluded && occluded { return false }
         if pauseOnBattery && onBattery { return false }

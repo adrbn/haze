@@ -220,9 +220,29 @@ final class AppModel: ObservableObject {
 
     func updateSettings(_ newSettings: AppSettings) {
         let launchChanged = newSettings.launchAtLogin != settings.launchAtLogin
+        let soundChanged = newSettings.videoSoundEnabled != settings.videoSoundEnabled
         settings = newSettings
         wallpaper.updateSettings(newSettings)
         if launchChanged { LaunchAtLogin.setEnabled(newSettings.launchAtLogin) }
+        if soundChanged, let current = currentWallpaper, current.type == .video {
+            wallpaper.apply(item: current, settings: settings)   // rebuild video with new mute state
+        }
+        persist()
+    }
+
+    // MARK: Favorites
+
+    func isFavorite(_ item: ContentItem) -> Bool {
+        settings.favoriteItemIDs.contains(item.id.uuidString)
+    }
+
+    func toggleFavorite(_ item: ContentItem) {
+        let id = item.id.uuidString
+        if let idx = settings.favoriteItemIDs.firstIndex(of: id) {
+            settings.favoriteItemIDs.remove(at: idx)
+        } else {
+            settings.favoriteItemIDs.append(id)
+        }
         persist()
     }
 

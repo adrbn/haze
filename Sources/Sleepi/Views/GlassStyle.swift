@@ -78,15 +78,14 @@ struct GradientSwatch: View {
     }
 }
 
-/// Cheap static representation of a 3D ShaderGradient (3-stop, rolled to match).
+/// Cheap static representation of a 3D ShaderGradient (clean diagonal — no
+/// rotation/scale, which clipped the corners).
 struct ShaderGradientSwatch: View {
     let config: ShaderGradientConfig
     var body: some View {
         LinearGradient(
             colors: config.colors.map(\.swiftUIColor),
-            startPoint: .top,
-            endPoint: .bottom)
-        .rotationEffect(.degrees(config.rotationZ))
-        .scaleEffect(2.0)   // cover corners after the roll
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing)
     }
 }

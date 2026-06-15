@@ -27,7 +27,7 @@ final class WallpaperController {
     }
 
     func apply(item: ContentItem, settings: AppSettings) {
-        display.apply(item: item, fpsCap: settings.globalFPSCap)
+        display.apply(item: item, fpsCap: settings.globalFPSCap, muted: !settings.videoSoundEnabled)
         occlusion.evaluate()
     }
 

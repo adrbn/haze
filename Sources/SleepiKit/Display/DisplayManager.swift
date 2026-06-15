@@ -14,6 +14,7 @@ public final class DisplayManager {
     private var entries: [ScreenEntry] = []
     private var currentItem: ContentItem?
     private var fpsCap: Int = 0
+    private var muted = true
     private var rendering = true
     private var lastScreenConfig: [CGRect] = []
     private var pendingRebuild: DispatchWorkItem?
@@ -29,9 +30,10 @@ public final class DisplayManager {
     public var hasContent: Bool { currentItem != nil }
 
     /// Replace the displayed content on every screen.
-    public func apply(item: ContentItem, fpsCap: Int) {
+    public func apply(item: ContentItem, fpsCap: Int, muted: Bool = true) {
         currentItem = item
         self.fpsCap = fpsCap
+        self.muted = muted
         rebuild()
     }
 
@@ -76,7 +78,7 @@ public final class DisplayManager {
         teardown()
         guard let item = currentItem else { return }
         for screen in NSScreen.screens {
-            guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: fpsCap) else {
+            guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: fpsCap, muted: muted) else {
                 Log.display.error("No renderer for item \(item.name, privacy: .public)")
                 continue
             }

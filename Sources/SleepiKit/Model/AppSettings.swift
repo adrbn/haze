@@ -25,6 +25,12 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// presets get seeded once on update and deleted ones don't reappear.
     public var seededGradientPresetIDs: [String]
 
+    /// Favourited item IDs (UUID strings).
+    public var favoriteItemIDs: [String]
+
+    /// Play audio for video wallpapers (off by default).
+    public var videoSoundEnabled: Bool
+
     public init(version: Int = AppSettings.currentVersion,
                 wallpaperItemID: UUID? = nil,
                 screensaverItemID: UUID? = nil,
@@ -34,7 +40,9 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 pauseInLowPowerMode: Bool = true,
                 globalFPSCap: Int = 0,
                 launchAtLogin: Bool = false,
-                seededGradientPresetIDs: [String] = []) {
+                seededGradientPresetIDs: [String] = [],
+                favoriteItemIDs: [String] = [],
+                videoSoundEnabled: Bool = false) {
         self.version = version
         self.wallpaperItemID = wallpaperItemID
         self.screensaverItemID = screensaverItemID
@@ -45,6 +53,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.globalFPSCap = globalFPSCap
         self.launchAtLogin = launchAtLogin
         self.seededGradientPresetIDs = seededGradientPresetIDs
+        self.favoriteItemIDs = favoriteItemIDs
+        self.videoSoundEnabled = videoSoundEnabled
     }
 
     public static let `default` = AppSettings()
@@ -63,5 +73,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         globalFPSCap = try c.decodeIfPresent(Int.self, forKey: .globalFPSCap) ?? d.globalFPSCap
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
         seededGradientPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededGradientPresetIDs) ?? d.seededGradientPresetIDs
+        favoriteItemIDs = try c.decodeIfPresent([String].self, forKey: .favoriteItemIDs) ?? d.favoriteItemIDs
+        videoSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .videoSoundEnabled) ?? d.videoSoundEnabled
     }
 }

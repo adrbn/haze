@@ -3,15 +3,44 @@ import AppKit
 import UniformTypeIdentifiers
 import SleepiKit
 
-/// The library: imported media (Videos, Pictures) and gradients (Fluid 3D,
-/// Classic 2D) in one place. Click any card to set it as the live wallpaper.
+/// The library: imported media and gradients in one place, filtered by a
+/// horizontal category bar (All / Favorites / Videos / Pictures / Fluid 3D /
+/// Classic 2D). Click any card to set it as the live wallpaper.
 struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var category: LibraryCategory = .all
 
-    private var videos: [ContentItem] { model.items.filter { $0.type == .video } }
-    private var pictures: [ContentItem] { model.items.filter { $0.type == .image || $0.type == .animatedImage } }
-    private var fluid: [ContentItem] { model.items.filter { $0.type == .shaderGradient } }
-    private var classic: [ContentItem] { model.items.filter { $0.type == .gradient } }
+    enum LibraryCategory: String, CaseIterable, Identifiable {
+        case all, favorites, videos, pictures, fluid, classic
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .all: return "All"
+            case .favorites: return "Favorites"
+            case .videos: return "Videos"
+            case .pictures: return "Pictures"
+            case .fluid: return "Fluid (3D)"
+            case .classic: return "Classic (2D)"
+            }
+        }
+        var systemImage: String? {
+            switch self {
+            case .favorites: return "star.fill"
+            default: return nil
+            }
+        }
+    }
+
+    private var shown: [ContentItem] {
+        switch category {
+        case .all: return model.items
+        case .favorites: return model.items.filter { model.isFavorite($0) }
+        case .videos: return model.items.filter { $0.type == .video }
+        case .pictures: return model.items.filter { $0.type == .image || $0.type == .animatedImage }
+        case .fluid: return model.items.filter { $0.type == .shaderGradient }
+        case .classic: return model.items.filter { $0.type == .gradient }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,17 +56,80 @@ struct WallpapersView: View {
                 }
             }
 
+            categoryBar
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    section("Videos", "Looping video wallpapers", videos,
-                            tag: nil, emptyHint: "Import a video (.mp4 / .mov) to add one.")
-                    section("Pictures", "Stills & animated GIFs", pictures,
-                            tag: nil, emptyHint: "Import an image or GIF to add one.")
-                    section("Fluid (3D)", "Lit, flowing 3D gradients", fluid, tag: "3D")
-                    section("Classic (2D)", "Flat animated gradients — lighter on the GPU", classic, tag: "2D")
+                if shown.isEmpty {
+                    emptyState
+                } else {
+                    LazyVGrid(columns: libraryGridColumns, spacing: 18) {
+                        ForEach(shown) { item in
+                            ContentCard(item: item,
+                                        isSelected: model.settings.wallpaperItemID == item.id,
+                                        tag: tag(for: item),
+                                        isFavorite: model.isFavorite(item),
+                                        onToggleFavorite: { model.toggleFavorite(item) },
+                                        onRename: { model.rename(item, to: $0) }) {
+                                model.setWallpaper(item)
+                            }
+                            .contextMenu { menu(for: item) }
+                        }
+                    }
+                    .padding(24)
                 }
-                .padding(.vertical, 10)
             }
+        }
+    }
+
+    private var categoryBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LibraryCategory.allCases) { cat in
+                    Button { category = cat } label: {
+                        HStack(spacing: 5) {
+                            if let img = cat.systemImage { Image(systemName: img) }
+                            Text(cat.title)
+                        }
+                        .font(.callout.weight(.medium))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(category == cat ? Color.accentColor : Color.white.opacity(0.08),
+                                    in: Capsule())
+                        .foregroundStyle(category == cat ? Color.white : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: category == .favorites ? "star" : "photo.on.rectangle.angled")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text(emptyMessage).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+
+    private var emptyMessage: String {
+        switch category {
+        case .favorites: return "No favorites yet — tap the ★ on any wallpaper."
+        case .videos: return "No videos yet — use Import to add .mp4 / .mov files."
+        case .pictures: return "No pictures yet — use Import to add images or GIFs."
+        default: return "Nothing here yet."
+        }
+    }
+
+    private func tag(for item: ContentItem) -> String? {
+        switch item.type {
+        case .shaderGradient: return "3D"
+        case .gradient: return "2D"
+        default: return nil
         }
     }
 
@@ -59,48 +151,10 @@ struct WallpapersView: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ subtitle: String, _ items: [ContentItem],
-                         tag: String?, emptyHint: String? = nil) -> some View {
-        if !items.isEmpty {
-            sectionHeader(title, subtitle)
-            grid(items, tag: tag)
-        } else if let emptyHint {
-            sectionHeader(title, subtitle)
-            Text(emptyHint)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 6)
-        }
-    }
-
-    private func sectionHeader(_ title: String, _ subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.title3.weight(.semibold))
-            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-    }
-
-    private func grid(_ items: [ContentItem], tag: String?) -> some View {
-        LazyVGrid(columns: libraryGridColumns, spacing: 18) {
-            ForEach(items) { item in
-                ContentCard(item: item,
-                            isSelected: model.settings.wallpaperItemID == item.id,
-                            tag: tag,
-                            onRename: { model.rename(item, to: $0) }) {
-                    model.setWallpaper(item)
-                }
-                .contextMenu { menu(for: item) }
-            }
-        }
-        .padding(.horizontal, 24)
-    }
-
-    @ViewBuilder
     private func menu(for item: ContentItem) -> some View {
+        Button(model.isFavorite(item) ? "Remove from Favorites" : "Add to Favorites") {
+            model.toggleFavorite(item)
+        }
         Button("Set as Wallpaper") { model.setWallpaper(item) }
         Button("Use as Screensaver") { model.setScreensaver(item) }
         if item.type.isGradient {

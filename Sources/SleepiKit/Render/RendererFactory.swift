@@ -3,11 +3,11 @@ import Foundation
 /// Builds the right `WallpaperRenderer` for a given `ContentItem`. Returns
 /// `nil` if the backing file is missing or the item is malformed.
 public enum RendererFactory {
-    public static func makeRenderer(for item: ContentItem, fpsCap: Int = 0) -> WallpaperRenderer? {
+    public static func makeRenderer(for item: ContentItem, fpsCap: Int = 0, muted: Bool = true) -> WallpaperRenderer? {
         switch item.type {
         case .video:
             guard let url = item.fileURL else { return nil }
-            return VideoRenderer(url: url, scaling: item.settings.scaling, rate: item.settings.speed)
+            return VideoRenderer(url: url, scaling: item.settings.scaling, rate: item.settings.speed, muted: muted)
         case .animatedImage:
             guard let url = item.fileURL else { return nil }
             return AnimatedImageRenderer(url: url, scaling: item.settings.scaling)

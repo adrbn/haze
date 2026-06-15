@@ -70,6 +70,10 @@ public final class PowerMonitor {
         let dnc = DistributedNotificationCenter.default()
         dnc.addObserver(self, selector: #selector(screenLocked), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
         dnc.addObserver(self, selector: #selector(screenUnlocked), name: NSNotification.Name("com.apple.screenIsUnlocked"), object: nil)
+        // Pause the desktop wallpaper while the screensaver runs, so it doesn't
+        // compete with the screensaver for the GPU (causing video stutter).
+        dnc.addObserver(self, selector: #selector(screensaverStarted), name: NSNotification.Name("com.apple.screensaver.didstart"), object: nil)
+        dnc.addObserver(self, selector: #selector(screensaverStopped), name: NSNotification.Name("com.apple.screensaver.didstop"), object: nil)
 
         // NSProcessInfoPowerStateDidChange may be delivered off the main thread,
         // so request main-queue delivery (the handler mutates AppKit/Metal views).
@@ -105,6 +109,8 @@ public final class PowerMonitor {
     @objc private func screensDidWake() { policy.displayAsleep = false; emit() }
     @objc private func screenLocked() { policy.screenLocked = true; emit() }
     @objc private func screenUnlocked() { policy.screenLocked = false; emit() }
+    @objc private func screensaverStarted() { policy.screensaverActive = true; emit() }
+    @objc private func screensaverStopped() { policy.screensaverActive = false; emit() }
 
     private func refreshPowerState() {
         policy.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled

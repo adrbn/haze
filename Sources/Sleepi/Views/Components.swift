@@ -39,11 +39,14 @@ struct ContentCard: View {
     let item: ContentItem
     let isSelected: Bool
     var tag: String? = nil
+    var isFavorite: Bool = false
+    var onToggleFavorite: (() -> Void)? = nil
     var onRename: ((String) -> Void)? = nil
     let action: () -> Void
 
     @State private var isRenaming = false
     @State private var draftName = ""
+    @State private var hovering = false
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -55,12 +58,30 @@ struct ContentCard: View {
                     .glassCard(cornerRadius: 16, selected: isSelected)
                     .overlay(alignment: .topLeading) { badge }
                     .overlay(alignment: .topTrailing) { tagPill }
+                    .overlay(alignment: .bottomLeading) { favoriteButton }
                     .overlay(alignment: .bottomTrailing) { selectedCheck }
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
+            .onHover { hovering = $0 }
 
             nameView
+        }
+    }
+
+    @ViewBuilder
+    private var favoriteButton: some View {
+        if onToggleFavorite != nil, hovering || isFavorite {
+            Button { onToggleFavorite?() } label: {
+                Image(systemName: isFavorite ? "star.fill" : "star")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isFavorite ? Color.yellow : .white)
+                    .padding(7)
+                    .background(.black.opacity(0.45), in: Circle())
+                    .padding(8)
+            }
+            .buttonStyle(.plain)
+            .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
         }
     }
 

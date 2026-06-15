@@ -23,6 +23,10 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Video") {
+                    Toggle("Play video sound", isOn: boolBinding(\.videoSoundEnabled))
+                }
+
                 Section("Startup") {
                     Toggle("Launch Sleepi at login", isOn: boolBinding(\.launchAtLogin))
                 }
