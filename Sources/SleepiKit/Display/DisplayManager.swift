@@ -23,9 +23,25 @@ public final class DisplayManager {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+
+        // The macOS desktop-picture window sits at the same level as ours and can
+        // be raised above it (e.g. when the Wallpaper settings pane opens, after a
+        // Space switch, or on wake), which makes our live wallpaper "disappear"
+        // behind the system one. Re-assert our windows to the front on those
+        // events so the live wallpaper stays visible.
+        let ws = NSWorkspace.shared.notificationCenter
+        ws.addObserver(self, selector: #selector(reassertWindows),
+                       name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        ws.addObserver(self, selector: #selector(reassertWindows),
+                       name: NSWorkspace.didWakeNotification, object: nil)
+        ws.addObserver(self, selector: #selector(reassertWindows),
+                       name: NSWorkspace.didActivateApplicationNotification, object: nil)
     }
 
-    deinit { NotificationCenter.default.removeObserver(self) }
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
 
     public var hasContent: Bool { currentItem != nil }
 
@@ -70,6 +86,17 @@ public final class DisplayManager {
     public func clear() {
         teardown()
         currentItem = nil
+    }
+
+    /// Re-pin every wallpaper window to the desktop level and bring it to the
+    /// front of that level, so the system desktop picture can't sit on top.
+    @objc public func reassertWindows() {
+        guard !entries.isEmpty else { return }
+        let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+        for entry in entries {
+            entry.window.level = level
+            entry.window.orderFrontRegardless()
+        }
     }
 
     // MARK: Internals

@@ -40,8 +40,26 @@ enum ScreensaverInstaller {
     }
 
     static func openSystemSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.ScreenSaver-Settings") {
-            NSWorkspace.shared.open(url)
+        // The Screen Saver pane moved around across macOS releases. On macOS 26
+        // (Tahoe) it no longer exists as a standalone pane — its controls live
+        // inside the "Wallpaper" pane (reached via its "Screen Saver…" button) —
+        // so deep-linking `ScreenSaver-Settings` lands on General instead.
+        // `NSWorkspace.open` returns true even for an unresolved pane, so we
+        // can't rely on the return value to fall through; branch on the OS.
+        let candidates: [String]
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 {
+            candidates = [
+                "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension",
+                "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension",
+            ]
+        } else {
+            candidates = [
+                "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension",
+                "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension",
+            ]
+        }
+        for string in candidates {
+            if let url = URL(string: string), NSWorkspace.shared.open(url) { return }
         }
     }
 }

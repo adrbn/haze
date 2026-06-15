@@ -42,6 +42,15 @@ extension ContentType {
         case .image: return "Image"
         }
     }
+
+    /// Short corner-pill label (gradients only).
+    var shortTag: String? {
+        switch self {
+        case .shaderGradient: return "3D"
+        case .gradient: return "2D"
+        default: return nil
+        }
+    }
 }
 
 struct ContentThumbnailView: View {

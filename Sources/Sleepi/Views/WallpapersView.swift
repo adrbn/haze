@@ -10,36 +10,8 @@ struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var category: LibraryCategory = .all
 
-    enum LibraryCategory: String, CaseIterable, Identifiable {
-        case all, favorites, videos, pictures, fluid, classic
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .all: return "All"
-            case .favorites: return "Favorites"
-            case .videos: return "Videos"
-            case .pictures: return "Pictures"
-            case .fluid: return "Fluid (3D)"
-            case .classic: return "Classic (2D)"
-            }
-        }
-        var systemImage: String? {
-            switch self {
-            case .favorites: return "star.fill"
-            default: return nil
-            }
-        }
-    }
-
     private var shown: [ContentItem] {
-        switch category {
-        case .all: return model.items
-        case .favorites: return model.items.filter { model.isFavorite($0) }
-        case .videos: return model.items.filter { $0.type == .video }
-        case .pictures: return model.items.filter { $0.type == .image || $0.type == .animatedImage }
-        case .fluid: return model.items.filter { $0.type == .shaderGradient }
-        case .classic: return model.items.filter { $0.type == .gradient }
-        }
+        model.items(in: category, pinnedFirst: model.settings.wallpaperItemID)
     }
 
     var body: some View {
@@ -56,7 +28,7 @@ struct WallpapersView: View {
                 }
             }
 
-            categoryBar
+            CategoryBar(selection: $category)
 
             ScrollView {
                 if shown.isEmpty {
@@ -66,7 +38,7 @@ struct WallpapersView: View {
                         ForEach(shown) { item in
                             ContentCard(item: item,
                                         isSelected: model.settings.wallpaperItemID == item.id,
-                                        tag: tag(for: item),
+                                        tag: item.type.shortTag,
                                         isFavorite: model.isFavorite(item),
                                         onToggleFavorite: { model.toggleFavorite(item) },
                                         onRename: { model.rename(item, to: $0) }) {
@@ -78,30 +50,6 @@ struct WallpapersView: View {
                     .padding(24)
                 }
             }
-        }
-    }
-
-    private var categoryBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(LibraryCategory.allCases) { cat in
-                    Button { category = cat } label: {
-                        HStack(spacing: 5) {
-                            if let img = cat.systemImage { Image(systemName: img) }
-                            Text(cat.title)
-                        }
-                        .font(.callout.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(category == cat ? Color.accentColor : Color.white.opacity(0.08),
-                                    in: Capsule())
-                        .foregroundStyle(category == cat ? Color.white : Color.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 8)
         }
     }
 
@@ -122,14 +70,6 @@ struct WallpapersView: View {
         case .videos: return "No videos yet — use Import to add .mp4 / .mov files."
         case .pictures: return "No pictures yet — use Import to add images or GIFs."
         default: return "Nothing here yet."
-        }
-    }
-
-    private func tag(for item: ContentItem) -> String? {
-        switch item.type {
-        case .shaderGradient: return "3D"
-        case .gradient: return "2D"
-        default: return nil
         }
     }
 

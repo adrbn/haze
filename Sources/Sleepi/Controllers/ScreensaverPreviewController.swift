@@ -16,6 +16,15 @@ final class ScreensaverPreviewController {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var startedAt: CFTimeInterval = 0
+    private var startLocation: NSPoint = .zero
+
+    /// Ignore all input briefly so the click that opened the preview (and any
+    /// settling cursor jitter) doesn't instantly dismiss it.
+    private let dismissGrace: CFTimeInterval = 1.0
+    /// A mouse *move* must travel at least this far to dismiss — tiny jitter from
+    /// resting a hand on the trackpad shouldn't kill the preview. Clicks, keys
+    /// and scrolls still dismiss immediately (after the grace period).
+    private let moveThreshold: CGFloat = 45
 
     private init() {}
 
@@ -52,6 +61,7 @@ final class ScreensaverPreviewController {
         guard !windows.isEmpty else { return }
         NSApp.activate(ignoringOtherApps: true)
         startedAt = CACurrentMediaTime()
+        startLocation = NSEvent.mouseLocation
         NSCursor.setHiddenUntilMouseMoves(true)
 
         let driveTimer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -66,18 +76,24 @@ final class ScreensaverPreviewController {
         ]
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
             let wasRunning = self?.isRunning == true
-            self?.dismissIfPastGrace()
+            self?.handleDismissEvent(event)
             return wasRunning ? nil : event   // swallow events (incl. the dismiss trigger) during preview
         }
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
-            self?.dismissIfPastGrace()
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+            self?.handleDismissEvent(event)
         }
     }
 
-    /// Ignore events for a short grace period so the click/movement that opened
-    /// the preview doesn't instantly dismiss it.
-    private func dismissIfPastGrace() {
-        guard CACurrentMediaTime() - startedAt > 0.6 else { return }
+    /// Decide whether an input event should dismiss the preview: never during the
+    /// grace period; for a mouse *move*, only once the cursor has travelled a
+    /// meaningful distance; for clicks/keys/scrolls, immediately after grace.
+    private func handleDismissEvent(_ event: NSEvent) {
+        guard CACurrentMediaTime() - startedAt > dismissGrace else { return }
+        if event.type == .mouseMoved {
+            let loc = NSEvent.mouseLocation
+            let dist = hypot(loc.x - startLocation.x, loc.y - startLocation.y)
+            guard dist > moveThreshold else { return }
+        }
         stop()
     }
 

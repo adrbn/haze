@@ -3,6 +3,17 @@ import Foundation
 /// User preferences plus the current wallpaper/screensaver selections.
 /// Persisted as `settings.json` so the screensaver process can read which
 /// item the user chose for it.
+/// How the main window presents its sections: a left sidebar, or a floating
+/// liquid-glass bar.
+public enum NavLayout: String, Codable, Sendable, CaseIterable {
+    case sidebar, bar
+}
+
+/// Which edge the floating liquid-glass nav bar hugs (when `navLayout == .bar`).
+public enum BarEdge: String, Codable, Sendable, CaseIterable {
+    case top, bottom
+}
+
 public struct AppSettings: Codable, Sendable, Equatable {
     public static let currentVersion = 1
 
@@ -31,6 +42,11 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// Play audio for video wallpapers (off by default).
     public var videoSoundEnabled: Bool
 
+    /// Main-window navigation presentation.
+    public var navLayout: NavLayout
+    /// Edge for the floating nav bar (used only when `navLayout == .bar`).
+    public var barEdge: BarEdge
+
     public init(version: Int = AppSettings.currentVersion,
                 wallpaperItemID: UUID? = nil,
                 screensaverItemID: UUID? = nil,
@@ -42,7 +58,9 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 launchAtLogin: Bool = false,
                 seededGradientPresetIDs: [String] = [],
                 favoriteItemIDs: [String] = [],
-                videoSoundEnabled: Bool = false) {
+                videoSoundEnabled: Bool = false,
+                navLayout: NavLayout = .sidebar,
+                barEdge: BarEdge = .top) {
         self.version = version
         self.wallpaperItemID = wallpaperItemID
         self.screensaverItemID = screensaverItemID
@@ -55,6 +73,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.seededGradientPresetIDs = seededGradientPresetIDs
         self.favoriteItemIDs = favoriteItemIDs
         self.videoSoundEnabled = videoSoundEnabled
+        self.navLayout = navLayout
+        self.barEdge = barEdge
     }
 
     public static let `default` = AppSettings()
@@ -75,5 +95,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         seededGradientPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededGradientPresetIDs) ?? d.seededGradientPresetIDs
         favoriteItemIDs = try c.decodeIfPresent([String].self, forKey: .favoriteItemIDs) ?? d.favoriteItemIDs
         videoSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .videoSoundEnabled) ?? d.videoSoundEnabled
+        navLayout = try c.decodeIfPresent(NavLayout.self, forKey: .navLayout) ?? d.navLayout
+        barEdge = try c.decodeIfPresent(BarEdge.self, forKey: .barEdge) ?? d.barEdge
     }
 }

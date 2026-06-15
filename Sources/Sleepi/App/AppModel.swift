@@ -246,6 +246,18 @@ final class AppModel: ObservableObject {
         persist()
     }
 
+    /// Items in a category, optionally floating one (the currently-applied
+    /// wallpaper/screensaver) to the front so it's always visible first.
+    func items(in category: LibraryCategory, pinnedFirst pinnedID: UUID? = nil) -> [ContentItem] {
+        let filtered = items.filter { category.matches($0, isFavorite: isFavorite($0)) }
+        guard let pinnedID, let idx = filtered.firstIndex(where: { $0.id == pinnedID }) else {
+            return filtered
+        }
+        var result = filtered
+        result.insert(result.remove(at: idx), at: 0)
+        return result
+    }
+
     func persist() {
         JSONStore.save(settings, to: ContentStore.settingsURL)
     }

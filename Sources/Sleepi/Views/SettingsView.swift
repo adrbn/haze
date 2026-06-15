@@ -10,6 +10,19 @@ struct SettingsView: View {
                        subtitle: "Tune resource use and startup behaviour")
 
             Form {
+                Section("Window") {
+                    Picker("Navigation", selection: navLayoutBinding) {
+                        Text("Sidebar").tag(NavLayout.sidebar)
+                        Text("Floating bar").tag(NavLayout.bar)
+                    }
+                    if model.settings.navLayout == .bar {
+                        Picker("Bar position", selection: barEdgeBinding) {
+                            Text("Top").tag(BarEdge.top)
+                            Text("Bottom").tag(BarEdge.bottom)
+                        }
+                    }
+                }
+
                 Section("Performance") {
                     Toggle("Pause when fully covered", isOn: boolBinding(\.pauseWhenOccluded))
                     Toggle("Pause when the display sleeps", isOn: boolBinding(\.pauseOnDisplaySleep))
@@ -60,6 +73,26 @@ struct SettingsView: View {
             set: {
                 var updated = model.settings
                 updated.globalFPSCap = $0
+                model.updateSettings(updated)
+            })
+    }
+
+    private var navLayoutBinding: Binding<NavLayout> {
+        Binding(
+            get: { model.settings.navLayout },
+            set: {
+                var updated = model.settings
+                updated.navLayout = $0
+                model.updateSettings(updated)
+            })
+    }
+
+    private var barEdgeBinding: Binding<BarEdge> {
+        Binding(
+            get: { model.settings.barEdge },
+            set: {
+                var updated = model.settings
+                updated.barEdge = $0
                 model.updateSettings(updated)
             })
     }
