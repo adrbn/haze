@@ -27,7 +27,12 @@ public final class WallpaperWindow: NSWindow {
 
         // Sit at the desktop-picture level → below Finder icons, above nothing.
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        // No `.stationary`: it pins the window to its origin Space and stops
+        // `.canJoinAllSpaces` from extending the (snapshot-able) poster backing to
+        // other Spaces — leaving them black in Mission Control. Without it the
+        // window genuinely joins every Space, so each Space's preview can show the
+        // poster instead of black.
+        collectionBehavior = [.canJoinAllSpaces, .ignoresCycle]
 
         setFrame(screen.frame, display: false)
     }
