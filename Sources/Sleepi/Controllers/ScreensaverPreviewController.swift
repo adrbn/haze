@@ -49,8 +49,9 @@ final class ScreensaverPreviewController {
             window.setFrame(screen.frame, display: true)
             window.orderFrontRegardless()
 
-            // Drive via timer (robust), like the screensaver host.
-            renderer.setExternallyDriven(true)
+            // Self-drive via the MTKView's display link (smooth) — unlike the
+            // sandboxed .saver host, a normal app window's display link fires, so
+            // a 30fps Timer here only adds jitter/lag.
             renderer.start()
             renderer.redraw()
 
@@ -63,12 +64,6 @@ final class ScreensaverPreviewController {
         startedAt = CACurrentMediaTime()
         startLocation = NSEvent.mouseLocation
         NSCursor.setHiddenUntilMouseMoves(true)
-
-        let driveTimer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            self?.renderers.forEach { $0.tick() }
-        }
-        RunLoop.main.add(driveTimer, forMode: .common)
-        timer = driveTimer
 
         let mask: NSEvent.EventTypeMask = [
             .mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown,
