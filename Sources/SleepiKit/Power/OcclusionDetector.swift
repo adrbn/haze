@@ -12,6 +12,7 @@ public final class OcclusionDetector {
     private var tokens: [NSObjectProtocol] = []
     private var pendingReeval: DispatchWorkItem?
     private var pollTimer: Timer?
+    private var lastEval: CFTimeInterval = 0
 
     public init() {}
 
@@ -33,7 +34,12 @@ public final class OcclusionDetector {
     /// Evaluate now, then again shortly after — Space/Mission-Control transitions
     /// settle asynchronously, so the immediate read can still see stale coverage.
     private func scheduleEvaluate() {
-        evaluate()
+        // Throttle the immediate scan: these notifications can arrive in bursts
+        // (a playing wallpaper updates often), and each evaluate() runs a
+        // CGWindowList scan on the main thread. Always keep the trailing re-eval
+        // so a settled state is still caught.
+        let now = CACurrentMediaTime()
+        if now - lastEval > 0.4 { evaluate() }
         pendingReeval?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.evaluate() }
         pendingReeval = work
@@ -62,6 +68,7 @@ public final class OcclusionDetector {
     }
 
     public func evaluate() {
+        lastEval = CACurrentMediaTime()
         let occluded = Self.computeOccluded()
         if occluded != currentlyOccluded {
             currentlyOccluded = occluded

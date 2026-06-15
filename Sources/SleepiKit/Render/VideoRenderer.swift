@@ -45,7 +45,7 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         queue.isMuted = muted
         queue.volume = muted ? 0 : 1
         queue.actionAtItemEnd = .none
-        queue.automaticallyWaitsToMinimizeStalling = false
+        queue.automaticallyWaitsToMinimizeStalling = false   // play immediately, no startup buffer wait
         self.asset = asset
         self.player = queue
         self.playbackRate = VideoRenderer.clampRate(rate)
@@ -56,6 +56,9 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
 
     private func primeLooperIfNeeded() {
         guard looper == nil else { return }
+        // Warm the asset's timing/track metadata so the first loop transition
+        // doesn't hitch (AVPlayerLooper otherwise stalls until they load).
+        asset.loadValuesAsynchronously(forKeys: ["duration", "tracks", "playable"])
         looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(asset: asset))
     }
 
