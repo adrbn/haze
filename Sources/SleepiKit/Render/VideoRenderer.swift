@@ -1,88 +1,209 @@
 import AppKit
 import AVFoundation
+import CoreMedia
 
-/// Layer-backed view that hosts an `AVPlayerLayer` and keeps it sized to bounds.
-final class PlayerHostView: NSView {
-    let playerLayer = AVPlayerLayer()
+/// Layer-backed view hosting an `AVSampleBufferDisplayLayer`.
+final class SampleBufferHostView: NSView {
+    let displayLayer = AVSampleBufferDisplayLayer()
 
-    init(player: AVPlayer, gravity: AVLayerVideoGravity) {
+    init(gravity: AVLayerVideoGravity) {
         super.init(frame: .zero)
         wantsLayer = true
         let root = CALayer()
         root.backgroundColor = NSColor.black.cgColor
+        root.isOpaque = true
         layer = root
-        playerLayer.player = player
-        playerLayer.videoGravity = gravity
-        playerLayer.frame = bounds
-        root.addSublayer(playerLayer)
+        displayLayer.videoGravity = gravity
+        displayLayer.backgroundColor = NSColor.black.cgColor
+        root.addSublayer(displayLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     override func layout() {
         super.layout()
-        playerLayer.frame = bounds
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)   // no reflow animation on resize
+        displayLayer.frame = bounds
+        CATransaction.commit()
     }
 }
 
-/// Seamless looping video playback with hardware decode and no audio.
+/// Smooth, seamless looping video for the desktop wallpaper.
+///
+/// Uses `AVSampleBufferDisplayLayer` driven by its own `CMTimebase`, fed by an
+/// `AVAssetReader`. Unlike `AVPlayerLayer` (whose internal display link macOS
+/// throttles for a non-key / desktop-level window — the "stops/resumes/jumps"
+/// stutter) this presents enqueued frames against the layer's own clock,
+/// independent of window focus. Looping is gapless: each pass's sample PTS is
+/// shifted by a running offset so the stream stays monotonic (no flush, no
+/// AVPlayerLooper reload hitch).
 public final class VideoRenderer: NSObject, WallpaperRenderer {
-    private let hostView: PlayerHostView
-    private let player: AVQueuePlayer
+    private let host: SampleBufferHostView
     private let asset: AVURLAsset
-    private var looper: AVPlayerLooper?
+    private var timebase: CMTimebase!
     private var playbackRate: Float
+    private var wantPlaying = false
+    private var primed = false   // timebase synced to the first enqueued frame
 
-    public var view: NSView { hostView }
+    private let serial = DispatchQueue(label: "co.sleepi.video.decode", qos: .userInitiated)
+    private var track: AVAssetTrack?
+    private var reader: AVAssetReader?
+    private var trackOutput: AVAssetReaderTrackOutput?
+    private var loopDuration: CMTime = .zero
+    private var ptsOffset: CMTime = .zero
+    private var ready = false
+
+    public var view: NSView { host }
 
     public init?(url: URL, scaling: Scaling, rate: Double = 1.0, muted: Bool = true) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             Log.render.error("Video file missing: \(url.lastPathComponent, privacy: .public)")
             return nil
         }
-        let asset = AVURLAsset(url: url)
-        let queue = AVQueuePlayer()
-        queue.isMuted = muted
-        queue.volume = muted ? 0 : 1
-        queue.actionAtItemEnd = .none
-        queue.automaticallyWaitsToMinimizeStalling = false   // play immediately, no startup buffer wait
-        self.asset = asset
-        self.player = queue
+        self.asset = AVURLAsset(url: url)
         self.playbackRate = VideoRenderer.clampRate(rate)
-        self.hostView = PlayerHostView(player: queue, gravity: scaling.videoGravity)
+        self.host = SampleBufferHostView(gravity: scaling.videoGravity)
         super.init()
-        primeLooperIfNeeded()
+
+        var tb: CMTimebase?
+        CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault,
+                                        sourceClock: CMClockGetHostTimeClock(),
+                                        timebaseOut: &tb)
+        timebase = tb
+        CMTimebaseSetTime(timebase, time: .zero)
+        CMTimebaseSetRate(timebase, rate: 0)
+        host.displayLayer.controlTimebase = timebase
+
+        Task { [weak self] in await self?.prepare() }
     }
 
-    private func primeLooperIfNeeded() {
-        guard looper == nil else { return }
-        // Warm the asset's timing/track metadata so the first loop transition
-        // doesn't hitch (AVPlayerLooper otherwise stalls until they load).
-        asset.loadValuesAsynchronously(forKeys: ["duration", "tracks", "playable"])
-        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(asset: asset))
+    private func prepare() async {
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            guard let track = tracks.first else { return }
+            self.loopDuration = try await asset.load(.duration)
+            self.track = track
+            serial.async { [weak self] in self?.beginFeeding() }
+        } catch {
+            Log.render.error("Video prepare failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: Decode → enqueue (serial queue)
+
+    private func makeReader() {
+        guard let track else { return }
+        reader?.cancelReading()
+        guard let r = try? AVAssetReader(asset: asset) else { return }
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+        ])
+        out.alwaysCopiesSampleData = false
+        guard r.canAdd(out) else { return }
+        r.add(out)
+        r.startReading()
+        reader = r
+        trackOutput = out
+    }
+
+    private func beginFeeding() {
+        ready = true
+        makeReader()
+        let layer = host.displayLayer
+        layer.requestMediaDataWhenReady(on: serial) { [weak self] in
+            guard let self else { return }
+            while layer.isReadyForMoreMediaData {
+                guard let sample = self.trackOutput?.copyNextSampleBuffer() else {
+                    // End of pass → advance offset, rebuild reader, keep going (gapless).
+                    self.ptsOffset = CMTimeAdd(self.ptsOffset, self.loopDuration)
+                    self.makeReader()
+                    if self.trackOutput == nil { break }
+                    continue
+                }
+                guard let shifted = Self.offsetTiming(sample, by: self.ptsOffset) else { continue }
+                layer.enqueue(shifted)
+                if !self.primed {
+                    // Sync the timebase to the first frame so it doesn't run ahead
+                    // of the content (which would leave the layer holding frame 0).
+                    let firstPTS = CMSampleBufferGetPresentationTimeStamp(shifted)
+                    DispatchQueue.main.async { [weak self] in self?.prime(at: firstPTS) }
+                }
+            }
+        }
+    }
+
+    private func prime(at pts: CMTime) {
+        guard !primed else { return }
+        primed = true
+        CMTimebaseSetTime(timebase, time: pts.isValid ? pts : .zero)
+        applyRate()
+    }
+
+    private static func offsetTiming(_ sb: CMSampleBuffer, by offset: CMTime) -> CMSampleBuffer? {
+        guard CMTimeCompare(offset, .zero) != 0 else { return sb }
+        var count = 0
+        CMSampleBufferGetSampleTimingInfoArray(sb, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
+        guard count > 0 else { return sb }
+        var timings = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(), count: count)
+        CMSampleBufferGetSampleTimingInfoArray(sb, entryCount: count, arrayToFill: &timings, entriesNeededOut: &count)
+        for i in 0..<count {
+            if timings[i].presentationTimeStamp.isValid {
+                timings[i].presentationTimeStamp = CMTimeAdd(timings[i].presentationTimeStamp, offset)
+            }
+            if timings[i].decodeTimeStamp.isValid {
+                timings[i].decodeTimeStamp = CMTimeAdd(timings[i].decodeTimeStamp, offset)
+            }
+        }
+        var out: CMSampleBuffer?
+        CMSampleBufferCreateCopyWithNewTiming(allocator: kCFAllocatorDefault, sampleBuffer: sb,
+                                              sampleTimingEntryCount: count, sampleTimingArray: &timings,
+                                              sampleBufferOut: &out)
+        return out
+    }
+
+    // MARK: Timebase / lifecycle (main)
+
+    private func applyRate() {
+        CMTimebaseSetRate(timebase, rate: (wantPlaying && primed) ? Double(playbackRate) : 0)
     }
 
     public func start() {
-        primeLooperIfNeeded()   // tolerate start() after a prior stop()
-        player.rate = playbackRate   // setting rate > 0 begins playback at that speed
+        wantPlaying = true
+        applyRate()
     }
-    public func pause() { player.pause() }
-    public func resume() { player.rate = playbackRate }
+
+    public func pause() {
+        wantPlaying = false
+        CMTimebaseSetRate(timebase, rate: 0)
+    }
+
+    public func resume() {
+        wantPlaying = true
+        applyRate()
+    }
+
     public func stop() {
-        player.pause()
-        player.removeAllItems()
-        looper = nil
+        wantPlaying = false
+        CMTimebaseSetRate(timebase, rate: 0)
+        host.displayLayer.stopRequestingMediaData()
+        serial.async { [weak self] in
+            self?.reader?.cancelReading()
+            self?.reader = nil
+            self?.trackOutput = nil
+        }
+        host.displayLayer.flushAndRemoveImage()
     }
 
     public func liveUpdate(_ item: ContentItem) {
         playbackRate = VideoRenderer.clampRate(item.settings.speed)
-        if player.rate != 0 { player.rate = playbackRate }   // adjust in place if playing
+        applyRate()
     }
 
-    /// Keep playback rate within the UI's range (0.25–2x).
-    static func clampRate(_ rate: Double) -> Float {
-        min(max(Float(rate), 0.25), 2.0)
-    }
+    static func clampRate(_ rate: Double) -> Float { min(max(Float(rate), 0.25), 2.0) }
 
-    deinit { player.pause() }
+    deinit {
+        reader?.cancelReading()
+        CMTimebaseSetRate(timebase, rate: 0)
+    }
 }
