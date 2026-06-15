@@ -150,6 +150,16 @@ final class AppModel: ObservableObject {
         persist()
     }
 
+    /// True when the screensaver follows the live wallpaper (no specific item
+    /// chosen → `screensaverContent()` falls back to the wallpaper).
+    var screensaverFollowsWallpaper: Bool { settings.screensaverItemID == nil }
+
+    /// Make the screensaver always mirror whatever the wallpaper currently is.
+    func matchScreensaverToWallpaper() {
+        settings.screensaverItemID = nil
+        persist()
+    }
+
     func togglePause() {
         isPaused.toggle()
         wallpaper.setUserPaused(isPaused)

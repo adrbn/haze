@@ -109,9 +109,11 @@ struct ScreensaverSettingsView: View {
     private var pickerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Screensaver content").font(.headline)
-            Text("Pick what the screensaver shows. Defaults to your current wallpaper if none is selected.")
+            Text("Pick what the screensaver shows, or have it mirror your live wallpaper.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+
+            matchWallpaperCard
 
             if shown.isEmpty {
                 emptyState
@@ -129,6 +131,36 @@ struct ScreensaverSettingsView: View {
                 }
             }
         }
+    }
+
+    private var matchWallpaperCard: some View {
+        let follows = model.screensaverFollowsWallpaper
+        return Button { model.matchScreensaverToWallpaper() } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "rectangle.on.rectangle.angled")
+                    .font(.title3)
+                    .foregroundStyle(follows ? Color.accentColor : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Match wallpaper").font(.headline)
+                    Text(model.currentWallpaper.map { "Always mirror your live wallpaper — currently \($0.name)" }
+                         ?? "Always mirror your live wallpaper")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                if follows {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white, Color.accentColor)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(cornerRadius: 16, selected: follows)
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 4)
     }
 
     private var emptyState: some View {
