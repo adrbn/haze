@@ -159,6 +159,7 @@ final class AppModel: ObservableObject {
         refresh()
         if settings.wallpaperItemID == item.id {
             wallpaper.apply(item: item, settings: settings)
+            syncCurrentSpeed()
         }
     }
 
@@ -190,6 +191,7 @@ final class AppModel: ObservableObject {
             } else {
                 wallpaper.clear()
             }
+            syncCurrentSpeed()
         }
         if settings.screensaverItemID == item.id {
             settings.screensaverItemID = nil

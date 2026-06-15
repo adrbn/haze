@@ -63,8 +63,12 @@ struct MainWindowView: View {
                             .foregroundStyle(.secondary)
                     }
                     Slider(
-                        value: Binding(get: { model.currentWallpaperSpeed },
-                                       set: { model.setCurrentSpeed($0) }),
+                        value: Binding(
+                            get: {
+                                let r = model.currentSpeedRange
+                                return min(max(model.currentWallpaperSpeed, r.lowerBound), r.upperBound)
+                            },
+                            set: { model.setCurrentSpeed($0) }),
                         in: model.currentSpeedRange)
                     .controlSize(.small)
                 }

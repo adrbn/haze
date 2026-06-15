@@ -48,7 +48,7 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
         queue.automaticallyWaitsToMinimizeStalling = false
         self.asset = asset
         self.player = queue
-        self.playbackRate = max(Float(rate), 0.1)
+        self.playbackRate = VideoRenderer.clampRate(rate)
         self.hostView = PlayerHostView(player: queue, gravity: scaling.videoGravity)
         super.init()
         primeLooperIfNeeded()
@@ -72,8 +72,13 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
     }
 
     public func liveUpdate(_ item: ContentItem) {
-        playbackRate = max(Float(item.settings.speed), 0.1)
+        playbackRate = VideoRenderer.clampRate(item.settings.speed)
         if player.rate != 0 { player.rate = playbackRate }   // adjust in place if playing
+    }
+
+    /// Keep playback rate within the UI's range (0.25–2x).
+    static func clampRate(_ rate: Double) -> Float {
+        min(max(Float(rate), 0.25), 2.0)
     }
 
     deinit { player.pause() }
