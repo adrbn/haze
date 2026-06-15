@@ -16,10 +16,20 @@ public protocol WallpaperRenderer: AnyObject {
     /// Apply a new global FPS cap in place (0 = follow display). Default: no-op
     /// — only renderers whose rate is configurable (gradients) need to react.
     func setFPSCap(_ cap: Int)
+
+    /// When externally driven, the renderer must NOT use its own display link;
+    /// the host calls `tick()` to advance one frame. Used by the screensaver,
+    /// where `MTKView`'s internal display link does not fire reliably.
+    func setExternallyDriven(_ on: Bool)
+
+    /// Advance/redraw one frame (only meaningful when externally driven).
+    func tick()
 }
 
 public extension WallpaperRenderer {
     func setFPSCap(_ cap: Int) {}
+    func setExternallyDriven(_ on: Bool) {}
+    func tick() {}
 }
 
 extension Scaling {

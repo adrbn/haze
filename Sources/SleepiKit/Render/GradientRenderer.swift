@@ -16,6 +16,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     private var config: GradientConfig
     private var fpsCap: Int
     private var startTime: CFTimeInterval = 0
+    private var externallyDriven = false
 
     public var view: NSView { mtkView }
 
@@ -92,11 +93,22 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     public func start() {
         startTime = CACurrentMediaTime()
         mtkView.preferredFramesPerSecond = effectiveFPS
-        mtkView.isPaused = false
+        if !externallyDriven { mtkView.isPaused = false }
     }
     public func pause() { mtkView.isPaused = true }
-    public func resume() { mtkView.isPaused = false }
+    public func resume() { if !externallyDriven { mtkView.isPaused = false } }
     public func stop() { mtkView.isPaused = true }
+
+    public func setExternallyDriven(_ on: Bool) {
+        externallyDriven = on
+        mtkView.enableSetNeedsDisplay = on
+        if on { mtkView.isPaused = true }
+    }
+
+    public func tick() {
+        guard externallyDriven else { return }
+        mtkView.draw()
+    }
 
     // MARK: MTKViewDelegate
 

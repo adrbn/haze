@@ -37,6 +37,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var config: ShaderGradientConfig
     private var fpsCap: Int
     private var startTime: CFTimeInterval = 0
+    private var externallyDriven = false
 
     private static let grid = 160   // plane subdivisions
 
@@ -150,11 +151,22 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     public func start() {
         startTime = CACurrentMediaTime()
         mtkView.preferredFramesPerSecond = effectiveFPS
-        mtkView.isPaused = false
+        if !externallyDriven { mtkView.isPaused = false }
     }
     public func pause() { mtkView.isPaused = true }
-    public func resume() { mtkView.isPaused = false }
+    public func resume() { if !externallyDriven { mtkView.isPaused = false } }
     public func stop() { mtkView.isPaused = true }
+
+    public func setExternallyDriven(_ on: Bool) {
+        externallyDriven = on
+        mtkView.enableSetNeedsDisplay = on
+        if on { mtkView.isPaused = true }
+    }
+
+    public func tick() {
+        guard externallyDriven else { return }
+        mtkView.draw()
+    }
 
     // MARK: MTKViewDelegate
 

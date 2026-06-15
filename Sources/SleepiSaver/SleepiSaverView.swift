@@ -27,14 +27,18 @@ final class SleepiSaverView: ScreenSaverView {
 
         let content = SleepiKit.screensaverContent()
         guard let renderer = RendererFactory.makeRenderer(for: content.item, fpsCap: content.fpsCap) else {
-            Log.saver.error("No renderer for screensaver item")
+            Log.saver.error("No renderer for screensaver item \(content.item.name, privacy: .public)")
             return
         }
         self.renderer = renderer
+        // Drive Metal rendering from animateOneFrame — MTKView's own display link
+        // does not fire reliably inside the legacyScreenSaver host.
+        renderer.setExternallyDriven(true)
         let view = renderer.view
         view.frame = bounds
         view.autoresizingMask = [.width, .height]
         addSubview(view)
+        Log.saver.info("SleepiSaver loaded \(content.item.name, privacy: .public) [\(content.item.type.rawValue, privacy: .public)] isPreview=\(self.isPreview, privacy: .public)")
     }
 
     override func startAnimation() {
@@ -47,8 +51,10 @@ final class SleepiSaverView: ScreenSaverView {
         renderer?.stop()
     }
 
-    // Renderers self-drive (AVPlayer / MTKView), so no per-frame work is needed.
-    override func animateOneFrame() {}
+    // Host timer drives each frame (see setExternallyDriven above).
+    override func animateOneFrame() {
+        renderer?.tick()
+    }
 
     override var hasConfigureSheet: Bool { false }
     override var configureSheet: NSWindow? { nil }
