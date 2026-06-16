@@ -12,15 +12,20 @@ final class SleepiSaverView: ScreenSaverView {
     private var driveTimer: Timer?
     private var lastDrawTime: CFTimeInterval = 0
 
+    /// The System Settings thumbnail (isPreview) is tiny and was driving the full
+    /// 3D render + 4K gaussian blur at 30fps — ~34% CPU / heat. There it only
+    /// needs a slow, blur-free render.
+    private var targetFPS: Double { isPreview ? 8 : 30 }
+
     override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
-        animationTimeInterval = 1.0 / 30.0
+        animationTimeInterval = 1.0 / targetFPS
         configure()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        animationTimeInterval = 1.0 / 30.0
+        animationTimeInterval = 1.0 / targetFPS
         configure()
     }
 
@@ -31,8 +36,14 @@ final class SleepiSaverView: ScreenSaverView {
         layer?.backgroundColor = NSColor.black.cgColor
 
         let content = SleepiKit.screensaverContent()
-        guard let renderer = RendererFactory.makeRenderer(for: content.item, fpsCap: content.fpsCap) else {
-            Log.saver.error("No renderer for screensaver item \(content.item.name, privacy: .public)")
+        var item = content.item
+        if isPreview {
+            // Drop the expensive gaussian-blur pass — invisible at thumbnail size.
+            item.gradient?.blur = 0
+            item.shaderGradient?.blur = 0
+        }
+        guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: isPreview ? Int(targetFPS) : content.fpsCap) else {
+            Log.saver.error("No renderer for screensaver item \(item.name, privacy: .public)")
             return
         }
         self.renderer = renderer
@@ -50,7 +61,7 @@ final class SleepiSaverView: ScreenSaverView {
         renderer.start()
         renderer.redraw()
         startDriveTimer()
-        Log.saver.info("SleepiSaver loaded \(content.item.name, privacy: .public) [\(content.item.type.rawValue, privacy: .public)] isPreview=\(self.isPreview, privacy: .public)")
+        Log.saver.info("SleepiSaver loaded \(item.name, privacy: .public) [\(item.type.rawValue, privacy: .public)] isPreview=\(self.isPreview, privacy: .public) fps=\(self.targetFPS, privacy: .public)")
     }
 
     override func startAnimation() {
@@ -76,18 +87,18 @@ final class SleepiSaverView: ScreenSaverView {
 
     private func startDriveTimer() {
         driveTimer?.invalidate()
-        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0 / targetFPS, repeats: true) { [weak self] _ in
             self?.drive()
         }
         RunLoop.main.add(timer, forMode: .common)
         driveTimer = timer
     }
 
-    /// Throttled to ~30fps so the host timer and our fallback timer don't
-    /// double-draw when both fire.
+    /// Throttled to the target rate so the host's animateOneFrame and our fallback
+    /// timer don't double-draw when both fire.
     private func drive() {
         let now = CACurrentMediaTime()
-        guard now - lastDrawTime >= 1.0 / 35.0 else { return }
+        guard now - lastDrawTime >= (1.0 / targetFPS) * 0.9 else { return }
         lastDrawTime = now
         renderer?.tick()
     }
