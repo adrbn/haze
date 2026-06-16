@@ -69,7 +69,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         self.commandQueue = queue
         self.config = config
         self.fpsCap = fpsCap
-        self.mtkView = MTKView(frame: .zero, device: device)
+        self.mtkView = CappedMTKView(frame: .zero, device: device)   // caps render res → less GPU/heat
         super.init()
 
         mtkView.colorPixelFormat = .bgra8Unorm
@@ -77,7 +77,6 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         mtkView.clearDepth = 1.0
         mtkView.framebufferOnly = true   // MPS writes an offscreen; the drawable is only a render target
-        mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
         mtkView.layer?.isOpaque = true
         mtkView.enableSetNeedsDisplay = false

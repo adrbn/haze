@@ -38,12 +38,11 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         self.commandQueue = queue
         self.config = config
         self.fpsCap = fpsCap
-        self.mtkView = MTKView(frame: .zero, device: device)
+        self.mtkView = CappedMTKView(frame: .zero, device: device)   // caps render res → less GPU/heat
         super.init()
 
         mtkView.colorPixelFormat = .bgra8Unorm
         mtkView.framebufferOnly = true   // MPS writes an offscreen; the drawable is only a render target
-        mtkView.autoResizeDrawable = true
         mtkView.wantsLayer = true
         mtkView.layer?.isOpaque = true
         mtkView.enableSetNeedsDisplay = false
