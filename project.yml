@@ -1,7 +1,7 @@
-name: Sleepi
+name: Haze
 
 options:
-  bundleIdPrefix: co.sleepi
+  bundleIdPrefix: com.adrbn.haze
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -26,92 +26,92 @@ settings:
     CLANG_ENABLE_OBJC_ARC: "YES"
 
 targets:
-  SleepiKit:
+  HazeKit:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/SleepiKit
+      - path: Sources/HazeKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.SleepiKit
-        PRODUCT_NAME: SleepiKit
+        PRODUCT_BUNDLE_IDENTIFIER: com.adrbn.haze.HazeKit
+        PRODUCT_NAME: HazeKit
         DEFINES_MODULE: "YES"
         GENERATE_INFOPLIST_FILE: "YES"
         SKIP_INSTALL: "YES"
         MARKETING_VERSION: "0.1.0"
         DYLIB_INSTALL_NAME_BASE: "@rpath"
 
-  Sleepi:
+  Haze:
     type: application
     platform: macOS
     sources:
-      - path: Sources/Sleepi
+      - path: Sources/Haze
     dependencies:
-      - target: SleepiKit
+      - target: HazeKit
         embed: true
         codeSign: true
-      - target: SleepiSaver
+      - target: HazeSaver
         link: false
         copy:
           destination: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.app
-        PRODUCT_NAME: Sleepi
+        PRODUCT_BUNDLE_IDENTIFIER: com.adrbn.haze.app
+        PRODUCT_NAME: Haze
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_LSUIElement: "YES"
-        INFOPLIST_KEY_CFBundleDisplayName: Sleepi
+        INFOPLIST_KEY_CFBundleDisplayName: Haze
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
-        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Sleepi contributors — GPL-3.0"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Haze contributors — GPL-3.0"
         ENABLE_HARDENED_RUNTIME: "YES"
         COMBINE_HIDPI_IMAGES: "YES"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
 
-  SleepiSaver:
+  HazeSaver:
     type: bundle
     platform: macOS
     sources:
-      - path: Sources/SleepiSaver
+      - path: Sources/HazeSaver
     dependencies:
-      - target: SleepiKit
+      - target: HazeKit
         embed: true
         codeSign: true
       - sdk: ScreenSaver.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.saver
-        PRODUCT_NAME: SleepiSaver
-        PRODUCT_MODULE_NAME: SleepiSaver
+        PRODUCT_BUNDLE_IDENTIFIER: com.adrbn.haze.saver
+        PRODUCT_NAME: HazeSaver
+        PRODUCT_MODULE_NAME: HazeSaver
         WRAPPER_EXTENSION: saver
         SKIP_INSTALL: "YES"
         GENERATE_INFOPLIST_FILE: "NO"
-        INFOPLIST_FILE: Sources/SleepiSaver/Info.plist
+        INFOPLIST_FILE: Sources/HazeSaver/Info.plist
         ENABLE_HARDENED_RUNTIME: "YES"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks"
 
-  SleepiKitTests:
+  HazeKitTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/SleepiKitTests
+      - path: Tests/HazeKitTests
     dependencies:
-      - target: SleepiKit
+      - target: HazeKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: co.sleepi.SleepiKitTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.adrbn.haze.HazeKitTests
         GENERATE_INFOPLIST_FILE: "YES"
 
 schemes:
-  Sleepi:
+  Haze:
     build:
       targets:
-        Sleepi: all
-        SleepiSaver: all
-        SleepiKitTests: [test]
+        Haze: all
+        HazeSaver: all
+        HazeKitTests: [test]
     run:
       config: Debug
     test:
       config: Debug
       gatherCoverageData: true
       targets:
-        - SleepiKitTests
+        - HazeKitTests

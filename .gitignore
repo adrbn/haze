@@ -26,3 +26,6 @@ Package.resolved
 dist/
 *.saver.zip
 *.app.zip
+
+# Local Claude Code config
+.claude/

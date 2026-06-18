@@ -1,7 +1,7 @@
-PROJECT := Sleepi.xcodeproj
-SCHEME  := Sleepi
+PROJECT := Haze.xcodeproj
+SCHEME  := Haze
 DEST    := platform=macOS,arch=arm64
-DEBUG_APP = $(shell find $(HOME)/Library/Developer/Xcode/DerivedData/Sleepi-*/Build/Products/Debug -maxdepth 1 -name Sleepi.app 2>/dev/null | head -1)
+DEBUG_APP = $(shell find $(HOME)/Library/Developer/Xcode/DerivedData/Haze-*/Build/Products/Debug -maxdepth 1 -name Haze.app 2>/dev/null | head -1)
 SAVER_DIR := $(HOME)/Library/Screen Savers
 
 .PHONY: all generate build test release run install-saver clean
@@ -25,10 +25,10 @@ run: build
 
 install-saver: build
 	@mkdir -p "$(SAVER_DIR)"
-	@rm -rf "$(SAVER_DIR)/SleepiSaver.saver"
-	@cp -R "$(DEBUG_APP)/Contents/Resources/SleepiSaver.saver" "$(SAVER_DIR)/"
-	@echo "Installed to $(SAVER_DIR)/SleepiSaver.saver — pick it in Screen Saver settings"
+	@rm -rf "$(SAVER_DIR)/HazeSaver.saver"
+	@cp -R "$(DEBUG_APP)/Contents/Resources/HazeSaver.saver" "$(SAVER_DIR)/"
+	@echo "Installed to $(SAVER_DIR)/HazeSaver.saver — pick it in Screen Saver settings"
 
 clean:
-	rm -rf Sleepi.xcodeproj build
+	rm -rf Haze.xcodeproj build
 	@echo "Cleaned generated project (DerivedData left intact)"
