@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- Drop your gradient app icon here, e.g. assets/icon.png -->
-<img src="assets/icon.png" width="120" alt="Haze" onerror="this.style.display='none'">
+<img src="assets/icon.png" width="128" alt="Haze app icon">
 
 # Haze
 
