@@ -2,7 +2,7 @@
 
 <img src="assets/icon.png" width="128" alt="Haze app icon">
 
-# Haze
+# haze
 
 **Live wallpapers, a matching screensaver, and animated Metal gradients for macOS — native, lightweight, free.**
 
