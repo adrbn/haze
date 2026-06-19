@@ -111,9 +111,17 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
     private func beginFeeding() {
         ready = true
         makeReader()
-        let layer = host.displayLayer
-        layer.requestMediaDataWhenReady(on: serial) { [weak self] in
+        // Capture ONLY `self`, weakly — never the layer. `requestMediaDataWhenReady`
+        // makes the layer own this block; capturing `displayLayer` strongly here too
+        // forms a layer↔block retain cycle that survives until `stopRequestingMediaData()`,
+        // leaking the layer and every decoded frame still queued in it, while the
+        // orphaned decode callback keeps running. The wallpaper keeps one renderer for
+        // its whole lifetime so it never surfaced; the screensaver host creates and drops
+        // a view per Space/idle, so leaked decoders piled up to GBs and pegged a core.
+        // Reach the layer through `self` so the only retained reference is the weak self.
+        host.displayLayer.requestMediaDataWhenReady(on: serial) { [weak self] in
             guard let self else { return }
+            let layer = self.host.displayLayer
             while layer.isReadyForMoreMediaData {
                 guard let sample = self.trackOutput?.copyNextSampleBuffer() else {
                     // End of pass → advance offset, rebuild reader, keep going (gapless).
@@ -204,6 +212,10 @@ public final class VideoRenderer: NSObject, WallpaperRenderer {
     static func clampRate(_ rate: Double) -> Float { min(max(Float(rate), 0.25), 2.0) }
 
     deinit {
+        // Break the layer↔callback link so the layer and its queued frames are
+        // released even if `stop()` was never called (the screensaver host can drop
+        // the view without ever invoking stopAnimation).
+        host.displayLayer.stopRequestingMediaData()
         reader?.cancelReading()
         CMTimebaseSetRate(timebase, rate: 0)
     }

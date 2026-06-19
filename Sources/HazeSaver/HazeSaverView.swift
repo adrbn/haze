@@ -29,7 +29,13 @@ final class HazeSaverView: ScreenSaverView {
         configure()
     }
 
-    deinit { driveTimer?.invalidate() }
+    deinit {
+        driveTimer?.invalidate()
+        // The screensaver host (legacyScreenSaver) can release this view without ever
+        // calling stopAnimation. Stop the renderer explicitly so its decoder/timer are
+        // torn down — otherwise per-Space/per-idle instances accumulate and overheat.
+        renderer?.stop()
+    }
 
     private func configure() {
         wantsLayer = true
