@@ -33,9 +33,11 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 
 ## Screenshots
 
-> _Add a shot of the library and a gradient on the desktop here._
->
-> `assets/library.png` · `assets/desktop.png`
+<div align="center">
+
+<img src="assets/library.png" width="820" alt="Haze — the wallpaper library, grouped by category">
+
+</div>
 
 ## Features
 
