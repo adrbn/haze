@@ -69,7 +69,7 @@ public struct ShaderGradientConfig: Codable, Hashable, Sendable {
                 amplitude: Double = 1.0,
                 strength: Double = 4.0,
                 brightness: Double = 1.2,
-                grain: Double = 0.2,
+                grain: Double = 0.44,
                 blur: Double = 0.0,
                 reflection: Double = 0.1,
                 cPolarAngle: Double = 90,
