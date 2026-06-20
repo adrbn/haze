@@ -68,8 +68,8 @@ public struct GradientConfig: Codable, Hashable, Sendable {
     public var fps: Int              // preferred render rate
 
     public init(colors: [RGBAColor],
-                speed: Double = 0.5,
-                grain: Double = 0.12,
+                speed: Double = 0.2,
+                grain: Double = 0.44,
                 warp: Double = 1.0,
                 brightness: Double = 1.0,
                 blur: Double = 0.0,

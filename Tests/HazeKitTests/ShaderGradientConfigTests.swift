@@ -7,7 +7,7 @@ final class ShaderGradientConfigTests: XCTestCase {
         XCTAssertEqual(c.type, .plane)
         XCTAssertEqual(c.colors.first, RGBAColor.hex("#ff5005"))
         XCTAssertEqual(c.colors.count, 3)
-        XCTAssertEqual(c.speed, 0.4, accuracy: 0.001)
+        XCTAssertEqual(c.speed, 0.2, accuracy: 0.001)   // global default; geometry/camera below stay on-reference
         XCTAssertEqual(c.density, 1.3, accuracy: 0.001)
         XCTAssertEqual(c.frequency, 5.5, accuracy: 0.001)
         XCTAssertEqual(c.amplitude, 1.0, accuracy: 0.001)
