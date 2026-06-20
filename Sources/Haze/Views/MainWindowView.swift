@@ -90,6 +90,7 @@ struct MainWindowView: View {
         case .wallpapers: WallpapersView()
         case .screensaver: ScreensaverSettingsView()
         case .settings: SettingsView()
+        case .about: AboutView()
         }
     }
 

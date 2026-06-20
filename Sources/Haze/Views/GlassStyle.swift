@@ -4,7 +4,7 @@ import HazeKit
 
 /// Sidebar destinations.
 enum AppTab: String, CaseIterable, Identifiable {
-    case wallpapers, screensaver, settings
+    case wallpapers, screensaver, settings, about
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .wallpapers: return "Wallpapers"
         case .screensaver: return "Screensaver"
         case .settings: return "Settings"
+        case .about: return "About"
         }
     }
 
@@ -20,6 +21,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .wallpapers: return "photo.on.rectangle.angled"
         case .screensaver: return "moon.zzz.fill"
         case .settings: return "gearshape.fill"
+        case .about: return "info.circle.fill"
         }
     }
 }

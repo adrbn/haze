@@ -47,14 +47,6 @@ struct SettingsView: View {
                 Section("Startup") {
                     Toggle("Launch Haze at login", isOn: boolBinding(\.launchAtLogin))
                 }
-
-                Section("About") {
-                    LabeledContent("Version", value: HazeKit.version)
-                    LabeledContent("License", value: "GPL-3.0")
-                    Text("Haze is free and open source — live wallpapers, screensaver, and Metal gradients, built to sip resources.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
