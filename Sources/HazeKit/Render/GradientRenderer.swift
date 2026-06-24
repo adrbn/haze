@@ -18,6 +18,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     private var fpsCap: Int
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
+    private var isStopped = false
 
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
@@ -88,7 +89,7 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         if let config = item.gradient { update(config: config) }
     }
 
-    public func redraw() { mtkView.draw() }
+    public func redraw() { autoreleasepool { mtkView.draw() } }
 
     private func updateColors() {
         let colors = config.resolvedColors
@@ -121,13 +122,21 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     // MARK: WallpaperRenderer
 
     public func start() {
+        isStopped = false
         startTime = CACurrentMediaTime()
         mtkView.preferredFramesPerSecond = effectiveFPS
         if !externallyDriven { mtkView.isPaused = false }
     }
     public func pause() { mtkView.isPaused = true }
     public func resume() { if !externallyDriven { mtkView.isPaused = false } }
-    public func stop() { mtkView.isPaused = true }
+    public func stop() {
+        // tick() drives draw() manually and ignores isPaused, so a flag is what
+        // actually halts an externally-driven (screensaver) frame. Free the blur
+        // textures + MPS kernel too, instead of only pausing.
+        isStopped = true
+        mtkView.isPaused = true
+        releaseBlurResources()
+    }
 
     public func setExternallyDriven(_ on: Bool) {
         externallyDriven = on
@@ -136,8 +145,12 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
     }
 
     public func tick() {
-        guard externallyDriven else { return }
-        mtkView.draw()
+        guard externallyDriven, !isStopped else { return }
+        // Wrap the manual draw in an autorelease pool: with the display link paused
+        // (externally-driven), MTKView doesn't provide its per-frame pool, so each
+        // frame's drawable/command buffer/encoders would pile up undrained on the
+        // RunLoop pool — multi-GB over a long screensaver run.
+        autoreleasepool { mtkView.draw() }
     }
 
     // MARK: MTKViewDelegate

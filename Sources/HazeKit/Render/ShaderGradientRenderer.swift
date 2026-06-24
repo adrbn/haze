@@ -46,6 +46,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var fpsCap: Int
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
+    private var isStopped = false
 
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
@@ -120,7 +121,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         if let config = item.shaderGradient { update(config: config) }
     }
 
-    public func redraw() { mtkView.draw() }
+    public func redraw() { autoreleasepool { mtkView.draw() } }
 
     /// Clear to a blend of the gradient's own colours so any uncovered edge
     /// reads as part of the gradient instead of black.
@@ -200,13 +201,21 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     // MARK: WallpaperRenderer
 
     public func start() {
+        isStopped = false
         startTime = CACurrentMediaTime()
         mtkView.preferredFramesPerSecond = effectiveFPS
         if !externallyDriven { mtkView.isPaused = false }
     }
     public func pause() { mtkView.isPaused = true }
     public func resume() { if !externallyDriven { mtkView.isPaused = false } }
-    public func stop() { mtkView.isPaused = true }
+    public func stop() {
+        // Authoritative stop: tick() drives draw() manually and ignores isPaused,
+        // so a flag is what actually halts an externally-driven (screensaver) frame.
+        // Also free the blur textures + MPS kernel instead of only pausing.
+        isStopped = true
+        mtkView.isPaused = true
+        releaseBlurResources()
+    }
 
     public func setExternallyDriven(_ on: Bool) {
         externallyDriven = on
@@ -215,8 +224,13 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     }
 
     public func tick() {
-        guard externallyDriven else { return }
-        mtkView.draw()
+        guard externallyDriven, !isStopped else { return }
+        // Manual draw off a RunLoop timer (display link is paused in externally-driven
+        // mode): MTKView only wraps a per-frame autorelease pool when ITS OWN link
+        // drives drawing. Without this pool, every frame's CAMetalDrawable / command
+        // buffer / encoders pile up on the never-drained RunLoop pool — ~2.6 GB over a
+        // multi-day screensaver run, the heat/throttle cause.
+        autoreleasepool { mtkView.draw() }
     }
 
     // MARK: MTKViewDelegate
