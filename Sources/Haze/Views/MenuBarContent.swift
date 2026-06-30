@@ -4,6 +4,7 @@ import HazeKit
 
 struct MenuBarContent: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var updater: UpdaterController
 
     /// Type groups for the "Switch Wallpaper" submenu, in display order. Together
     /// they cover every item exactly once (each item has one content type).
@@ -48,6 +49,11 @@ struct MenuBarContent: View {
         }
 
         Divider()
+
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Button("Quit Haze") {
             NSApplication.shared.terminate(nil)
