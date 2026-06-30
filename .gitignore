@@ -29,3 +29,6 @@ dist/
 
 # Local Claude Code config
 .claude/
+
+# Sparkle signing key backup — NEVER commit (this is the private update-signing key)
+.secrets/

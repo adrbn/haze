@@ -25,6 +25,11 @@ settings:
     ALWAYS_SEARCH_USER_PATHS: "NO"
     CLANG_ENABLE_OBJC_ARC: "YES"
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
+
 targets:
   HazeKit:
     type: framework
@@ -54,16 +59,13 @@ targets:
         link: false
         copy:
           destination: resources
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.adrbn.haze.app
         PRODUCT_NAME: Haze
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        GENERATE_INFOPLIST_FILE: "YES"
-        INFOPLIST_KEY_LSUIElement: "YES"
-        INFOPLIST_KEY_CFBundleDisplayName: Haze
-        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
-        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Haze contributors — GPL-3.0"
+        INFOPLIST_FILE: Sources/Haze/Info.plist
         ENABLE_HARDENED_RUNTIME: "YES"
         COMBINE_HIDPI_IMAGES: "YES"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
