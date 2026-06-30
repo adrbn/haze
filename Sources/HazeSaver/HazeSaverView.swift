@@ -1,5 +1,6 @@
 import ScreenSaver
 import AppKit
+import CoreGraphics
 import QuartzCore
 import HazeKit
 
@@ -101,11 +102,27 @@ final class HazeSaverView: ScreenSaverView {
     }
 
     /// Throttled to the target rate so the host's animateOneFrame and our fallback
-    /// timer don't double-draw when both fire.
+    /// timer don't double-draw when both fire. Also self-gates on visibility +
+    /// display power: `legacyScreenSaver` can abandon a saver view without ever
+    /// calling `stopAnimation()` (per-Space / per-idle instances accumulate), and a
+    /// timer-driven renderer would then pin the GPU for *days*. We draw only while
+    /// this instance is genuinely on screen and the display is awake.
     private func drive() {
+        guard shouldDraw else { return }
         let now = CACurrentMediaTime()
         guard now - lastDrawTime >= (1.0 / targetFPS) * 0.9 else { return }
         lastDrawTime = now
         renderer?.tick()
+    }
+
+    /// `true` only when this instance is actually visible on an awake display. The
+    /// System Settings thumbnail (`isPreview`) is always considered live. Mirrors
+    /// the live wallpaper's occlusion / display-sleep pausing via `PlaybackPolicy`.
+    private var shouldDraw: Bool {
+        if isPreview { return true }
+        let visible = window?.occlusionState.contains(.visible) ?? false
+        return PlaybackPolicy.saverShouldDraw(
+            visible: visible,
+            displayAsleep: CGDisplayIsAsleep(CGMainDisplayID()) != 0)
     }
 }

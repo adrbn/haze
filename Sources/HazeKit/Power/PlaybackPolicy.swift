@@ -66,4 +66,15 @@ public struct PlaybackPolicy: Equatable, Sendable {
         pauseOnBattery = settings.pauseOnBattery
         pauseInLowPowerMode = settings.pauseInLowPowerMode
     }
+
+    /// Render gate for an externally-driven host (the screensaver) that only knows
+    /// two things: whether its view is actually visible, and whether the display is
+    /// awake. `legacyScreenSaver` can abandon a saver view without ever calling
+    /// `stopAnimation()` (per-Space / per-idle instances accumulate), so the saver
+    /// must self-gate — otherwise an orphaned instance renders, and overheats the
+    /// Mac, for days. Uses the default pause-when-occluded / pause-on-display-sleep
+    /// behaviour, the same the live wallpaper relies on.
+    public static func saverShouldDraw(visible: Bool, displayAsleep: Bool) -> Bool {
+        PlaybackPolicy(occluded: !visible, displayAsleep: displayAsleep).shouldRender
+    }
 }

@@ -57,4 +57,22 @@ final class PlaybackPolicyTests: XCTestCase {
         XCTAssertFalse(p.pauseWhenOccluded)
         XCTAssertTrue(p.pauseOnBattery)
     }
+
+    // MARK: Screensaver self-gate (externally-driven host path)
+
+    // An orphaned screensaver instance — legacyScreenSaver abandoned the view
+    // without calling stopAnimation, so per-Space / per-idle instances pile up —
+    // must only draw while genuinely visible on an awake display. Without this it
+    // renders at full FPS for days and overheats the Mac.
+    func testSaverDrawsWhenVisibleAndAwake() {
+        XCTAssertTrue(PlaybackPolicy.saverShouldDraw(visible: true, displayAsleep: false))
+    }
+
+    func testSaverPausesWhenNotVisible() {
+        XCTAssertFalse(PlaybackPolicy.saverShouldDraw(visible: false, displayAsleep: false))
+    }
+
+    func testSaverPausesWhenDisplayAsleep() {
+        XCTAssertFalse(PlaybackPolicy.saverShouldDraw(visible: true, displayAsleep: true))
+    }
 }
