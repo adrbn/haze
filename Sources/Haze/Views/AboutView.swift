@@ -3,9 +3,10 @@ import AppKit
 import HazeKit
 
 /// The About page: app identity (icon · name · version · author) and two action
-/// buttons — a GitHub link and a (placeholder) donate button.
+/// buttons — a GitHub link and a Ko-fi donate button.
 struct AboutView: View {
     private let githubURL = URL(string: "https://github.com/adrbn/haze")!
+    private let donateURL = URL(string: "https://ko-fi.com/adrbn")!
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,7 +92,7 @@ struct AboutView: View {
 
     private var donateButton: some View {
         Button {
-            // Ko-fi link added later.
+            NSWorkspace.shared.open(donateURL)
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: "cup.and.saucer.fill")
@@ -99,15 +100,13 @@ struct AboutView: View {
                 Text("Donate")
                     .fontWeight(.semibold)
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white)
             .padding(.horizontal, 18)
             .padding(.vertical, 11)
-            .background(Color.white.opacity(0.06), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+            .background(Color(red: 0.98, green: 0.35, blue: 0.35), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(true)
-        .opacity(0.55)
-        .help("Ko-fi coming soon")
+        .help("Support Haze on Ko-fi")
     }
 }
