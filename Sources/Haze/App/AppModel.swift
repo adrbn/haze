@@ -82,6 +82,23 @@ final class AppModel: ObservableObject {
             guard let self, let current = self.currentWallpaper else { return }
             self.wallpaper.apply(item: current, settings: self.settings)
         }
+
+        // Belt-and-braces: a fixed post-launch delay proved too early on some
+        // sessions (the timer-based re-pick didn't take; a later manual one
+        // did). Redo the re-pick ONCE after the first Space change — by then
+        // the window server is fully settled and conditions match the manual
+        // re-select that verifiably works. One-shot: observer removes itself.
+        var token: NSObjectProtocol?
+        token = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            if let token { NSWorkspace.shared.notificationCenter.removeObserver(token) }
+            guard let self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                guard let current = self.currentWallpaper else { return }
+                self.wallpaper.apply(item: current, settings: self.settings)
+            }
+        }
     }
 
     // MARK: Derived
