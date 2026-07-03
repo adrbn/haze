@@ -30,10 +30,18 @@ public final class DisplayManager {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        // Re-assert window Space membership on every Space switch — the live
+        // wallpaper was otherwise missing during swipes (esp. to/from full-screen
+        // app Spaces) until re-selected. Safe with `.stationary`: the window stays
+        // out of Mission Control snapshots, so this won't reintroduce MC-black.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(reaffirmWindows),
+            name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     public var hasContent: Bool { currentItem != nil }
@@ -81,13 +89,9 @@ public final class DisplayManager {
         currentItem = nil
     }
 
-    /// Re-assert every wallpaper window's Space membership (no rebuild) — used at
-    /// launch and on app-open, when the window server may not have settled the
-    /// window onto every Space yet. Not wired to Space switches: the live
-    /// wallpaper staying visible across swipes is handled at the Metal layer
-    /// (transaction-synced presentation in the gradient renderers), not by
-    /// re-ordering the window on every swipe.
-    public func reaffirmWindows() {
+    /// Re-assert every wallpaper window's Space membership (no rebuild) — on launch
+    /// (window server not settled) and on every Space switch.
+    @objc public func reaffirmWindows() {
         for entry in entries { entry.window.reaffirmDesktopPresence() }
     }
 

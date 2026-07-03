@@ -49,11 +49,6 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
         // Control (where Metal can't be captured). Frames are opaque, so live
         // viewing is unchanged.
         mtkView.layer?.isOpaque = false
-        // Present inside the Core Animation transaction (see presentInTransaction)
-        // so the presented surface stays bound to the window's compositor tree
-        // across Space switches — otherwise the live gradient vanishes and the
-        // static poster shows through until the wallpaper is re-picked.
-        (mtkView.layer as? CAMetalLayer)?.presentsWithTransaction = true
         mtkView.enableSetNeedsDisplay = false
         mtkView.isPaused = true
         mtkView.preferredFramesPerSecond = effectiveFPS
@@ -223,7 +218,8 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
             comp.setFragmentTexture(blurred, index: 0)
             comp.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             comp.endEncoding()
-            presentInTransaction(drawable, commandBuffer)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
         } else {
             guard let passDescriptor = view.currentRenderPassDescriptor,
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
@@ -231,20 +227,9 @@ public final class GradientRenderer: NSObject, WallpaperRenderer, MTKViewDelegat
                 return
             }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, colorBuffer: colorBuffer)
-            presentInTransaction(drawable, commandBuffer)
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
         }
-    }
-
-    /// Commit and present the drawable inside the current Core Animation
-    /// transaction (the layer has `presentsWithTransaction = true`). draw(in:)
-    /// always runs on the main thread, so it rides the main-thread CA
-    /// transaction: commit → waitUntilScheduled → present. This re-binds the
-    /// presented surface to the window's compositor tree each frame, keeping the
-    /// live gradient visible after a Space switch instead of showing the poster.
-    private func presentInTransaction(_ drawable: CAMetalDrawable, _ commandBuffer: MTLCommandBuffer) {
-        commandBuffer.commit()
-        commandBuffer.waitUntilScheduled()
-        drawable.present()
     }
 
     /// Offscreen target for the blurred result (MPS writes it, composite reads it).
