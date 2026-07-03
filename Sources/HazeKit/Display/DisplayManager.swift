@@ -124,11 +124,19 @@ public final class DisplayManager {
 
     private func repairSpaceMembership() {
         guard currentItem != nil else { return }
+        // Force a fresh present on every Space change: the compositor can keep
+        // showing a stale snapshot of the Metal layer on a Space it just
+        // switched to (the static poster shows through), even though the
+        // renderer is drawing and the window is on-screen. A redraw hands the
+        // window server a new frame to composite.
+        for entry in entries { entry.renderer.redraw() }
+        logDesktopWindowStack()
         // Reversed so a failed recreation (entry removed) can't shift the
         // indices of entries not yet visited.
         for index in entries.indices.reversed() {
             let entry = entries[index]
             let display = Self.displayID(of: entry.screen)
+            Log.display.debug("renderer frames=\(entry.renderer.renderedFrames, privacy: .public) window=\(entry.window.windowNumber, privacy: .public)")
             let healthy = Self.windowLooksPresent(entry.window)
             guard repairPolicy.verdict(display: display, isOnActiveSpace: healthy) == .repair else { continue }
             Log.display.info("wallpaper window missing from active Space on display \(display, privacy: .public) — recreating it (auto re-pick)")
@@ -147,6 +155,22 @@ public final class DisplayManager {
         let onScreen = windowIsInOnScreenList(window.windowNumber)
         Log.display.debug("space check: window \(window.windowNumber, privacy: .public) onActiveSpace=\(onSpace, privacy: .public) onScreenList=\(onScreen, privacy: .public)")
         return onSpace && onScreen
+    }
+
+    /// Diagnostic: the desktop-level slice of the window server's front-to-back
+    /// on-screen list for the current Space — shows whether anything (e.g. the
+    /// system wallpaper) is composited ABOVE our window.
+    private func logDesktopWindowStack() {
+        guard let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return }
+        let ours = Set(entries.map(\.window.windowNumber))
+        let desktop = list.filter { ($0[kCGWindowLayer as String] as? Int ?? 0) < 0 }
+        let stack = desktop.map { w -> String in
+            let num = w[kCGWindowNumber as String] as? Int ?? -1
+            let layer = w[kCGWindowLayer as String] as? Int ?? 0
+            let owner = w[kCGWindowOwnerName as String] as? String ?? "?"
+            return "\(ours.contains(num) ? "OURS" : owner)#\(num)@\(layer)"
+        }.joined(separator: " > ")
+        Log.display.debug("desktop stack (front→back): \(stack, privacy: .public)")
     }
 
     private static func windowIsInOnScreenList(_ number: Int) -> Bool {

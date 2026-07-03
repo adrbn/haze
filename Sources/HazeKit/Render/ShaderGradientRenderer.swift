@@ -47,6 +47,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
     private var isStopped = false
+    public private(set) var renderedFrames: UInt64 = 0
 
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
@@ -242,6 +243,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
               let vertexBuffer, let indexBuffer,
               let drawable = view.currentDrawable,
               let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+        renderedFrames &+= 1
 
         if startTime == 0 { startTime = CACurrentMediaTime() }
         let elapsed = Float(CACurrentMediaTime() - startTime)
