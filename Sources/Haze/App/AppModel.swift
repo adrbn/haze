@@ -72,31 +72,25 @@ final class AppModel: ObservableObject {
             self?.wallpaper.reaffirm()
         }
 
-        // Automatic one-shot "re-pick": a wallpaper window created during app
-        // launch stays frozen during Space-slide transitions (macOS shows its
-        // snapshot, not the live layer) — but a window recreated once the app
-        // has settled composites LIVE through the slide for the whole session
-        // (user-verified: a manual re-select of the preset fixes it). Recreate
-        // once, after launch settles, so no click is ever needed.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+        // Automatic one-shot "re-pick" that reproduces the ONLY context in which
+        // the wallpaper composites live through Space-slide transitions: a window
+        // (re)built while the app is `.regular`, not the `.accessory` menu-bar
+        // agent it launches as. That's exactly why a manual re-select fixes it —
+        // opening the settings window promotes the app to `.regular` first. A
+        // plain `apply()` in the background (`.accessory`) never worked at any
+        // delay (incl. the June +0.8s attempt). So: promote → activate → rebuild
+        // → drop back to `.accessory` (the window keeps the treatment for the
+        // session, just as it does after the user closes the settings window).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let self, let current = self.currentWallpaper else { return }
+            let wasAccessory = NSApp.activationPolicy() == .accessory
+            if wasAccessory { NSApp.setActivationPolicy(.regular) }
+            NSApp.activate(ignoringOtherApps: true)
             self.wallpaper.apply(item: current, settings: self.settings)
-        }
-
-        // Belt-and-braces: a fixed post-launch delay proved too early on some
-        // sessions (the timer-based re-pick didn't take; a later manual one
-        // did). Redo the re-pick ONCE after the first Space change — by then
-        // the window server is fully settled and conditions match the manual
-        // re-select that verifiably works. One-shot: observer removes itself.
-        var token: NSObjectProtocol?
-        token = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            if let token { NSWorkspace.shared.notificationCenter.removeObserver(token) }
-            guard let self else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                guard let current = self.currentWallpaper else { return }
-                self.wallpaper.apply(item: current, settings: self.settings)
+            if wasAccessory {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    if NSApp.keyWindow == nil { NSApp.setActivationPolicy(.accessory) }
+                }
             }
         }
     }
