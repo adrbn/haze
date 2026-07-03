@@ -49,10 +49,18 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 - 🧊 **Native Liquid Glass UI** — real Liquid Glass on macOS 26, graceful `.ultraThinMaterial` fallback on 15.
 - ✨ **Menu‑bar agent** — no Dock clutter; switch wallpapers (grouped by category) or pause right from the menu bar.
 - 🚀 **Launch at login** — optional, one toggle.
+- 🔄 **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
+
+## Download
+
+Grab the latest **[`Haze.dmg`](https://github.com/adrbn/haze/releases/latest)** from
+Releases, drag it to Applications, and launch. Builds are ad‑hoc signed, so on first
+open right‑click **Haze.app → Open** (or run `xattr -cr /Applications/Haze.app`) to
+get past Gatekeeper. After that, Haze keeps itself up to date automatically.
 
 ## Requirements
 
-- macOS **15.0+** (built and tested on macOS 26, Apple Silicon)
+- macOS **15.0+** (built and tested on macOS 26–27, Apple Silicon)
 - Xcode **26** with the **Metal Toolchain** component
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 
@@ -114,7 +122,8 @@ detection. When it says *don’t render*, every renderer pauses (video stops dec
 - [ ] Static **login‑window background** (admin‑only, OS‑restricted)
 - [ ] **Per‑display** independent content
 - [ ] GIF → HEVC transcode‑on‑import for lighter playback
-- [ ] Notarized release + auto‑update
+- [x] In‑app auto‑update (Sparkle) with signed appcast
+- [ ] Notarized release (Developer ID) for a clean first‑open
 
 ## Distribution notes
 
