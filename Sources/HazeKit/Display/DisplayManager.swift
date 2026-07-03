@@ -7,7 +7,6 @@ import AppKit
 @MainActor
 public final class DisplayManager {
     private struct ScreenEntry {
-        let screen: NSScreen
         let window: WallpaperWindow
         let renderer: WallpaperRenderer
         let backing: NSImageView
@@ -20,13 +19,6 @@ public final class DisplayManager {
     private var rendering = true
     private var lastScreenConfig: [CGRect] = []
     private var pendingRebuild: DispatchWorkItem?
-    private var pendingSpaceRepair: DispatchWorkItem?
-    private var repairPolicy = SpaceRepairPolicy()
-    /// Bumped on every teardown/recreation; in-flight repair checks and
-    /// post-recreation verifications compare it and no-op when stale, so async
-    /// work scheduled against a previous window generation can never touch (or
-    /// wrongly judge) windows it didn't create.
-    private var repairGeneration = 0
     /// A static still of the current wallpaper, shown *behind* the (non-opaque)
     /// Metal/video view. macOS can't snapshot a Metal/sample-buffer layer for
     /// Space-switch swipes or Mission Control (black there), but it does snapshot
@@ -38,18 +30,10 @@ public final class DisplayManager {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        // Re-assert window Space membership on every Space switch — the live
-        // wallpaper was otherwise missing during swipes (esp. to/from full-screen
-        // app Spaces) until re-selected. Safe with `.stationary`: the window stays
-        // out of Mission Control snapshots, so this won't reintroduce MC-black.
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self, selector: #selector(reaffirmWindows),
-            name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     public var hasContent: Bool { currentItem != nil }
@@ -97,128 +81,14 @@ public final class DisplayManager {
         currentItem = nil
     }
 
-    /// Re-assert every wallpaper window's Space membership — on launch (window
-    /// server not settled), on app open, and on every Space switch. Re-asserting
-    /// collectionBehavior is not enough when the active Space didn't exist at
-    /// window-creation time (`.canJoinAllSpaces` binds only to then-existing
-    /// Spaces; full-screen-app Spaces are created lazily) — such a window must be
-    /// recreated, exactly what a manual re-pick of the wallpaper does. So this
-    /// also schedules a debounced membership check that repairs only the affected
-    /// screen(s), guarded by `SpaceRepairPolicy` against rebuild loops.
-    @objc public func reaffirmWindows() {
+    /// Re-assert every wallpaper window's Space membership (no rebuild) — used at
+    /// launch and on app-open, when the window server may not have settled the
+    /// window onto every Space yet. Not wired to Space switches: the live
+    /// wallpaper staying visible across swipes is handled at the Metal layer
+    /// (transaction-synced presentation in the gradient renderers), not by
+    /// re-ordering the window on every swipe.
+    public func reaffirmWindows() {
         for entry in entries { entry.window.reaffirmDesktopPresence() }
-        scheduleSpaceRepair()
-    }
-
-    private func scheduleSpaceRepair() {
-        guard currentItem != nil else { return }
-        pendingSpaceRepair?.cancel()
-        let generation = repairGeneration
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, generation == self.repairGeneration else { return }
-            self.repairSpaceMembership()
-        }
-        pendingSpaceRepair = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
-    }
-
-    private func repairSpaceMembership() {
-        guard currentItem != nil else { return }
-        // Force a fresh present on every Space change: the compositor can keep
-        // showing a stale snapshot of the Metal layer on a Space it just
-        // switched to (the static poster shows through), even though the
-        // renderer is drawing and the window is on-screen. A redraw hands the
-        // window server a new frame to composite.
-        for entry in entries { entry.renderer.redraw() }
-        logDesktopWindowStack()
-        // Reversed so a failed recreation (entry removed) can't shift the
-        // indices of entries not yet visited.
-        for index in entries.indices.reversed() {
-            let entry = entries[index]
-            let display = Self.displayID(of: entry.screen)
-            Log.display.debug("renderer frames=\(entry.renderer.renderedFrames, privacy: .public) window=\(entry.window.windowNumber, privacy: .public)")
-            let healthy = Self.windowLooksPresent(entry.window)
-            guard repairPolicy.verdict(display: display, isOnActiveSpace: healthy) == .repair else { continue }
-            Log.display.info("wallpaper window missing from active Space on display \(display, privacy: .public) — recreating it (auto re-pick)")
-            recreateEntry(at: index)
-        }
-    }
-
-    /// Ground-truth presence test. `isOnActiveSpace` reflects the *intent* of
-    /// `.canJoinAllSpaces` (it can report true on a Space the window server never
-    /// actually joined the window to), so it can't be trusted alone. The
-    /// window-server on-screen list is what's really composited on the current
-    /// Space — if our window isn't in it, the user is looking at the static
-    /// poster no matter what `isOnActiveSpace` claims.
-    private static func windowLooksPresent(_ window: NSWindow) -> Bool {
-        let onSpace = window.isOnActiveSpace
-        let onScreen = windowIsInOnScreenList(window.windowNumber)
-        Log.display.debug("space check: window \(window.windowNumber, privacy: .public) onActiveSpace=\(onSpace, privacy: .public) onScreenList=\(onScreen, privacy: .public)")
-        return onSpace && onScreen
-    }
-
-    /// Diagnostic: the desktop-level slice of the window server's front-to-back
-    /// on-screen list for the current Space — shows whether anything (e.g. the
-    /// system wallpaper) is composited ABOVE our window.
-    private func logDesktopWindowStack() {
-        guard let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return }
-        let ours = Set(entries.map(\.window.windowNumber))
-        let desktop = list.filter { ($0[kCGWindowLayer as String] as? Int ?? 0) < 0 }
-        let stack = desktop.map { w -> String in
-            let num = w[kCGWindowNumber as String] as? Int ?? -1
-            let layer = w[kCGWindowLayer as String] as? Int ?? 0
-            let owner = w[kCGWindowOwnerName as String] as? String ?? "?"
-            return "\(ours.contains(num) ? "OURS" : owner)#\(num)@\(layer)"
-        }.joined(separator: " > ")
-        Log.display.debug("desktop stack (front→back): \(stack, privacy: .public)")
-    }
-
-    private static func windowIsInOnScreenList(_ number: Int) -> Bool {
-        guard number > 0,
-              let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else {
-            return true   // fail open: never repair on missing information
-        }
-        return list.contains { ($0[kCGWindowNumber as String] as? Int) == number }
-    }
-
-    /// Tear down and recreate a single screen's window + renderer — the scoped
-    /// equivalent of the manual wallpaper re-pick that reliably restores Space
-    /// membership. If the fresh window still isn't on the active Space once
-    /// settled (display is showing a full-screen Space that refuses desktop
-    /// windows), suppress further repairs for that display until it recovers.
-    private func recreateEntry(at index: Int) {
-        guard let item = currentItem, entries.indices.contains(index) else { return }
-        let old = entries[index]
-        let display = Self.displayID(of: old.screen)
-        // Resolve the screen freshly — NSScreen instances can go stale.
-        guard let screen = NSScreen.screens.first(where: { Self.displayID(of: $0) == display }) else { return }
-
-        old.renderer.stop()
-        old.window.contentView = nil
-        old.window.orderOut(nil)
-        guard let fresh = makeEntry(for: screen, item: item) else {
-            entries.remove(at: index)
-            return
-        }
-        entries[index] = fresh
-        scheduleInitialRedraws(for: [fresh])
-
-        // Tie the verification to THIS recreation: any later teardown/recreation
-        // bumps the generation and this closure no-ops instead of judging (and
-        // possibly suppressing) a window it didn't create.
-        repairGeneration += 1
-        let generation = repairGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            guard let self, generation == self.repairGeneration else { return }
-            guard let current = self.entries.first(where: { Self.displayID(of: $0.screen) == display }),
-                  !Self.windowLooksPresent(current.window) else { return }
-            self.repairPolicy.repairDidFail(display: display)
-            Log.display.info("display \(display, privacy: .public) still off-Space after recreate — suppressing repairs until it recovers")
-        }
-    }
-
-    private static func displayID(of screen: NSScreen) -> UInt32 {
-        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
     }
 
     /// Set the static poster shown behind the live view (so Space swipes / Mission
@@ -234,58 +104,48 @@ public final class DisplayManager {
     private func rebuild() {
         teardown()
         guard let item = currentItem else { return }
-        repairPolicy.reset()
         for screen in NSScreen.screens {
-            if let entry = makeEntry(for: screen, item: item) { entries.append(entry) }
+            guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: fpsCap, muted: muted) else {
+                Log.display.error("No renderer for item \(item.name, privacy: .public)")
+                continue
+            }
+            let window = WallpaperWindow(screen: screen)
+
+            // Container: snapshot-able poster behind, live (non-opaque) view on top.
+            let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+            container.wantsLayer = true
+            container.autoresizingMask = [.width, .height]
+
+            let backing = NSImageView(frame: container.bounds)
+            backing.imageScaling = .scaleAxesIndependently
+            backing.autoresizingMask = [.width, .height]
+            backing.image = fallbackImageURL.flatMap { NSImage(contentsOf: $0) }
+            container.addSubview(backing)
+
+            let contentView = renderer.view
+            contentView.frame = container.bounds
+            contentView.autoresizingMask = [.width, .height]
+            container.addSubview(contentView)
+
+            window.contentView = container
+            window.orderFrontRegardless()
+            renderer.start()
+            if !rendering { renderer.pause() }
+            entries.append(ScreenEntry(window: window, renderer: renderer, backing: backing))
         }
         lastScreenConfig = NSScreen.screens.map(\.frame)
         Log.display.info("Applied '\(item.name, privacy: .public)' to \(self.entries.count, privacy: .public) screen(s)")
-        scheduleInitialRedraws(for: entries)
-    }
 
-    private func makeEntry(for screen: NSScreen, item: ContentItem) -> ScreenEntry? {
-        guard let renderer = RendererFactory.makeRenderer(for: item, fpsCap: fpsCap, muted: muted) else {
-            Log.display.error("No renderer for item \(item.name, privacy: .public)")
-            return nil
-        }
-        let window = WallpaperWindow(screen: screen)
-
-        // Container: snapshot-able poster behind, live (non-opaque) view on top.
-        let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-        container.wantsLayer = true
-        container.autoresizingMask = [.width, .height]
-
-        let backing = NSImageView(frame: container.bounds)
-        backing.imageScaling = .scaleAxesIndependently
-        backing.autoresizingMask = [.width, .height]
-        backing.image = fallbackImageURL.flatMap { NSImage(contentsOf: $0) }
-        container.addSubview(backing)
-
-        let contentView = renderer.view
-        contentView.frame = container.bounds
-        contentView.autoresizingMask = [.width, .height]
-        container.addSubview(contentView)
-
-        window.contentView = container
-        window.orderFrontRegardless()
-        renderer.start()
-        if !rendering { renderer.pause() }
-        return ScreenEntry(screen: screen, window: window, renderer: renderer, backing: backing)
-    }
-
-    // Guarantee an initial frame is presented, even if the renderer was
-    // created while paused (launched behind other windows / occluded). Run
-    // on the next runloop turns so the view is laid out and the drawable is
-    // ready — otherwise a paused wallpaper stays blank until interaction.
-    private func scheduleInitialRedraws(for created: [ScreenEntry]) {
+        // Guarantee an initial frame is presented, even if the renderer was
+        // created while paused (launched behind other windows / occluded). Run
+        // on the next runloop turns so the view is laid out and the drawable is
+        // ready — otherwise a paused wallpaper stays blank until interaction.
+        let created = entries
         DispatchQueue.main.async { created.forEach { $0.renderer.redraw() } }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { created.forEach { $0.renderer.redraw() } }
     }
 
     private func teardown() {
-        repairGeneration += 1
-        pendingSpaceRepair?.cancel()
-        pendingSpaceRepair = nil
         for entry in entries {
             entry.renderer.stop()
             entry.window.contentView = nil

@@ -32,11 +32,6 @@ public protocol WallpaperRenderer: AnyObject {
     /// Force one immediate frame — used when the wallpaper is revealed (e.g.
     /// swipe-to-desktop) so it doesn't appear blank until the next display tick.
     func redraw()
-
-    /// Frames actually drawn into a vended drawable since start. Diagnostic:
-    /// a frozen counter while the renderer is "running" means the layer stopped
-    /// vending drawables (the visible symptom is a stuck, static frame).
-    var renderedFrames: UInt64 { get }
 }
 
 public extension WallpaperRenderer {
@@ -45,7 +40,6 @@ public extension WallpaperRenderer {
     func tick() {}
     func liveUpdate(_ item: ContentItem) {}
     func redraw() {}
-    var renderedFrames: UInt64 { 0 }
 }
 
 extension Scaling {

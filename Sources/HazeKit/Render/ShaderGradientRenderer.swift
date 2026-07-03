@@ -47,7 +47,6 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var startTime: CFTimeInterval = 0
     private var externallyDriven = false
     private var isStopped = false
-    public private(set) var renderedFrames: UInt64 = 0
 
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
@@ -84,6 +83,13 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         // Control (Metal can't be captured there). The mesh + clearColor fill the
         // frame opaquely (alpha 1), so live viewing is unchanged.
         mtkView.layer?.isOpaque = false
+        // Present inside the Core Animation transaction (see presentInTransaction).
+        // Because the layer is non-opaque and desktop-level, the async present
+        // path lets the window server keep sampling a stale surface after a Space
+        // switch — the live gradient then vanishes and the static poster behind
+        // shows through, until the wallpaper is re-picked. Transaction-synced
+        // presentation re-binds the presented surface every frame and fixes it.
+        (mtkView.layer as? CAMetalLayer)?.presentsWithTransaction = true
         mtkView.enableSetNeedsDisplay = false
         mtkView.isPaused = true
         mtkView.preferredFramesPerSecond = effectiveFPS
@@ -243,7 +249,6 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
               let vertexBuffer, let indexBuffer,
               let drawable = view.currentDrawable,
               let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-        renderedFrames &+= 1
 
         if startTime == 0 { startTime = CACurrentMediaTime() }
         let elapsed = Float(CACurrentMediaTime() - startTime)
@@ -297,8 +302,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             comp.setFragmentTexture(blurred, index: 0)
             comp.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             comp.endEncoding()
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
+            presentInTransaction(drawable, commandBuffer)
         } else {
             guard let passDescriptor = view.currentRenderPassDescriptor,
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
@@ -307,9 +311,21 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             }
             encodeGradient(encoder, &uniforms, pipeline: pipeline, depthState: depthState,
                            vertexBuffer: vertexBuffer, indexBuffer: indexBuffer, colorBuffer: colorBuffer)
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
+            presentInTransaction(drawable, commandBuffer)
         }
+    }
+
+    /// Commit and present the drawable inside the current Core Animation
+    /// transaction (the layer has `presentsWithTransaction = true`). draw(in:)
+    /// always runs on the main thread — both the display-link path and the
+    /// manual tick()/redraw() path — so it rides the main-thread CA transaction:
+    /// commit → waitUntilScheduled → present. This re-binds the presented surface
+    /// to the window's compositor tree each frame, keeping the live gradient
+    /// visible after a Space switch instead of falling back to the poster.
+    private func presentInTransaction(_ drawable: CAMetalDrawable, _ commandBuffer: MTLCommandBuffer) {
+        commandBuffer.commit()
+        commandBuffer.waitUntilScheduled()
+        drawable.present()
     }
 
     /// Offscreen target for the blurred result (MPS writes it, composite reads it).
