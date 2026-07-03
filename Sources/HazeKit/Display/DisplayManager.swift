@@ -129,12 +129,32 @@ public final class DisplayManager {
         for index in entries.indices.reversed() {
             let entry = entries[index]
             let display = Self.displayID(of: entry.screen)
-            let onSpace = entry.window.isOnActiveSpace
-            Log.display.debug("space check: display \(display, privacy: .public) onActiveSpace=\(onSpace, privacy: .public)")
-            guard repairPolicy.verdict(display: display, isOnActiveSpace: onSpace) == .repair else { continue }
-            Log.display.info("wallpaper window off-Space on display \(display, privacy: .public) — recreating it (auto re-pick)")
+            let healthy = Self.windowLooksPresent(entry.window)
+            guard repairPolicy.verdict(display: display, isOnActiveSpace: healthy) == .repair else { continue }
+            Log.display.info("wallpaper window missing from active Space on display \(display, privacy: .public) — recreating it (auto re-pick)")
             recreateEntry(at: index)
         }
+    }
+
+    /// Ground-truth presence test. `isOnActiveSpace` reflects the *intent* of
+    /// `.canJoinAllSpaces` (it can report true on a Space the window server never
+    /// actually joined the window to), so it can't be trusted alone. The
+    /// window-server on-screen list is what's really composited on the current
+    /// Space — if our window isn't in it, the user is looking at the static
+    /// poster no matter what `isOnActiveSpace` claims.
+    private static func windowLooksPresent(_ window: NSWindow) -> Bool {
+        let onSpace = window.isOnActiveSpace
+        let onScreen = windowIsInOnScreenList(window.windowNumber)
+        Log.display.debug("space check: window \(window.windowNumber, privacy: .public) onActiveSpace=\(onSpace, privacy: .public) onScreenList=\(onScreen, privacy: .public)")
+        return onSpace && onScreen
+    }
+
+    private static func windowIsInOnScreenList(_ number: Int) -> Bool {
+        guard number > 0,
+              let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else {
+            return true   // fail open: never repair on missing information
+        }
+        return list.contains { ($0[kCGWindowNumber as String] as? Int) == number }
     }
 
     /// Tear down and recreate a single screen's window + renderer — the scoped
@@ -167,7 +187,7 @@ public final class DisplayManager {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self, generation == self.repairGeneration else { return }
             guard let current = self.entries.first(where: { Self.displayID(of: $0.screen) == display }),
-                  !current.window.isOnActiveSpace else { return }
+                  !Self.windowLooksPresent(current.window) else { return }
             self.repairPolicy.repairDidFail(display: display)
             Log.display.info("display \(display, privacy: .public) still off-Space after recreate — suppressing repairs until it recovers")
         }
