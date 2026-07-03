@@ -71,6 +71,17 @@ final class AppModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.wallpaper.reaffirm()
         }
+
+        // Automatic one-shot "re-pick": a wallpaper window created during app
+        // launch stays frozen during Space-slide transitions (macOS shows its
+        // snapshot, not the live layer) — but a window recreated once the app
+        // has settled composites LIVE through the slide for the whole session
+        // (user-verified: a manual re-select of the preset fixes it). Recreate
+        // once, after launch settles, so no click is ever needed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self, let current = self.currentWallpaper else { return }
+            self.wallpaper.apply(item: current, settings: self.settings)
+        }
     }
 
     // MARK: Derived
