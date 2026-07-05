@@ -12,6 +12,7 @@ final class HazeSaverView: ScreenSaverView {
     private var renderer: WallpaperRenderer?
     private var driveTimer: Timer?
     private var lastDrawTime: CFTimeInterval = 0
+    private var lastGateLog: CFTimeInterval = 0
 
     /// The System Settings thumbnail (isPreview) is tiny and was driving the full
     /// 3D render + 4K gaussian blur at 30fps — ~34% CPU / heat. There it only
@@ -108,8 +109,20 @@ final class HazeSaverView: ScreenSaverView {
     /// timer-driven renderer would then pin the GPU for *days*. We draw only while
     /// this instance is genuinely on screen and the display is awake.
     private func drive() {
-        guard shouldDraw else { return }
         let now = CACurrentMediaTime()
+        guard shouldDraw else {
+            // Diagnostic: say WHY we're not drawing (throttled) — the gate has
+            // silently frozen the saver before when its inputs went stale.
+            if now - lastGateLog > 5 {
+                lastGateLog = now
+                let hasWindow = window != nil
+                let vis = window?.isVisible ?? false
+                let occ = window?.occlusionState.contains(.visible) ?? false
+                let asleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+                Log.saver.info("gated: window=\(hasWindow, privacy: .public) isVisible=\(vis, privacy: .public) occlusionVisible=\(occ, privacy: .public) displayAsleep=\(asleep, privacy: .public)")
+            }
+            return
+        }
         guard now - lastDrawTime >= (1.0 / targetFPS) * 0.9 else { return }
         lastDrawTime = now
         renderer?.tick()
@@ -118,9 +131,16 @@ final class HazeSaverView: ScreenSaverView {
     /// `true` only when this instance is actually visible on an awake display. The
     /// System Settings thumbnail (`isPreview`) is always considered live. Mirrors
     /// the live wallpaper's occlusion / display-sleep pausing via `PlaybackPolicy`.
+    ///
+    /// NOTE: this must use `isVisible` (window ordered on screen), NOT
+    /// `occlusionState` — on macOS 27 the saver host reports the actively
+    /// displayed saver window as non-visible, which froze the screensaver on its
+    /// first frame. `isVisible` still distinguishes the live instance from the
+    /// abandoned per-Space/per-idle instances (their windows are ordered out),
+    /// so the runaway-GPU protection this gate exists for is preserved.
     private var shouldDraw: Bool {
         if isPreview { return true }
-        let visible = window?.occlusionState.contains(.visible) ?? false
+        let visible = window?.isVisible ?? false
         return PlaybackPolicy.saverShouldDraw(
             visible: visible,
             displayAsleep: CGDisplayIsAsleep(CGMainDisplayID()) != 0)
