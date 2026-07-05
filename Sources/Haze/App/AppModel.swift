@@ -83,14 +83,26 @@ final class AppModel: ObservableObject {
         // session, just as it does after the user closes the settings window).
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let self, let current = self.currentWallpaper else { return }
-            let wasAccessory = NSApp.activationPolicy() == .accessory
-            if wasAccessory { NSApp.setActivationPolicy(.regular) }
-            NSApp.activate(ignoringOtherApps: true)
-            self.wallpaper.apply(item: current, settings: self.settings)
-            if wasAccessory {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    if NSApp.keyWindow == nil { NSApp.setActivationPolicy(.accessory) }
-                }
+            self.applyWallpaperLive(current)
+        }
+    }
+
+    /// Apply a wallpaper so its window composites live through Space-slide
+    /// transitions. The window only gets that treatment when (re)built while the
+    /// app is `.regular` — not the `.accessory` menu-bar agent it runs as in the
+    /// background. So when we're an accessory (e.g. the user picked a preset from
+    /// the menu bar with no window open), briefly promote → activate for the
+    /// rebuild, then drop back to `.accessory` (the window keeps the treatment
+    /// for the session, exactly as it does after the settings window closes).
+    /// When a window is already open (`.regular`) this is just a normal apply.
+    private func applyWallpaperLive(_ item: ContentItem) {
+        let wasAccessory = NSApp.activationPolicy() == .accessory
+        if wasAccessory { NSApp.setActivationPolicy(.regular) }
+        NSApp.activate(ignoringOtherApps: true)
+        wallpaper.apply(item: item, settings: settings)
+        if wasAccessory {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if NSApp.keyWindow == nil { NSApp.setActivationPolicy(.accessory) }
             }
         }
     }
@@ -119,7 +131,10 @@ final class AppModel: ObservableObject {
 
     func setWallpaper(_ item: ContentItem) {
         settings.wallpaperItemID = item.id
-        wallpaper.apply(item: item, settings: settings)
+        // Route through applyWallpaperLive so a change made from the menu bar
+        // (app is `.accessory`, no window open) still composites live through
+        // Space slides — otherwise the rebuilt window gets snapshot-frozen again.
+        applyWallpaperLive(item)
         persist()
         currentWallpaperSpeed = speed(of: item)
         syncSystemWallpaper()
