@@ -97,8 +97,12 @@ final class AppModel: ObservableObject {
     /// When a window is already open (`.regular`) this is just a normal apply.
     private func applyWallpaperLive(_ item: ContentItem) {
         let wasAccessory = NSApp.activationPolicy() == .accessory
+        // Promote to `.regular` for the rebuild (that's what gives the window its
+        // live-through-slide treatment) but DON'T `activate()` — we don't want to
+        // steal focus. If policy alone is enough, this is invisible bar a brief
+        // Dock-icon blip; if the treatment needs frontmost activation, the slide
+        // re-freezes and we restore the activate() call.
         if wasAccessory { NSApp.setActivationPolicy(.regular) }
-        NSApp.activate(ignoringOtherApps: true)
         wallpaper.apply(item: item, settings: settings)
         if wasAccessory {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
