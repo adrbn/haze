@@ -14,8 +14,15 @@ name: Release
 # higher build number than what's installed.
 #
 # Requires repo secret SPARKLE_ED_PRIVATE_KEY — the EdDSA private key whose
-# public half is SUPublicEDKey in Info.plist. That signature, not Apple's, is
-# what authenticates an update, so ad-hoc builds update safely.
+# public half is SUPublicEDKey in Info.plist. That signature is what authenticates
+# the *contents* of an update.
+#
+# It is NOT sufficient on its own: Sparkle also refuses to install an update whose
+# code signature does not match the installed app's, and an ad-hoc binary's
+# designated requirement is its own cdhash — different on every build. So an
+# ad-hoc release can never self-update (verified on-device; the same update
+# installs when both copies carry the same Developer ID). Sign releases with the
+# Developer ID below or auto-update is dead on arrival, Gatekeeper aside.
 #
 # Apple signing is OPTIONAL and detected at run time. Set all five secrets below
 # and the build is signed with the Developer ID certificate, notarized and

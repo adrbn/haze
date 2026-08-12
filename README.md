@@ -56,9 +56,21 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 ## Download
 
 Grab the latest **[`Haze.dmg`](https://github.com/adrbn/haze/releases/latest)** from
-Releases, drag it to Applications, and launch. Builds are ad‑hoc signed, so on first
-open right‑click **Haze.app → Open** (or run `xattr -cr /Applications/Haze.app`) to
-get past Gatekeeper. After that, Haze keeps itself up to date automatically.
+Releases, drag it to Applications, and launch.
+
+> [!IMPORTANT]
+> **An ad‑hoc signed copy cannot auto‑update — v0.1.0 included.** Sparkle refuses to
+> install an update whose code signature doesn't match the installed app's, and an
+> ad‑hoc binary's designated requirement *is its own cdhash*, which changes with
+> every build. So the check can never pass, whatever the update is signed with.
+> Verified on‑device: Sparkle logs `Code signature of the new version doesn't match
+> the old version` and silently stops; the same update installs fine when both
+> copies carry the same Developer ID. If you are on v0.1.0, download the DMG once by
+> hand — from a Developer ID‑signed build onward, in‑app updates work.
+
+Builds that are not signed with a Developer ID also trip Gatekeeper on first open:
+open **System Settings → Privacy & Security → Open Anyway**, or run
+`xattr -cr /Applications/Haze.app`.
 
 ## Requirements
 
@@ -160,6 +172,10 @@ Set `HAZE_CODE_SIGN_IDENTITY` / `HAZE_DEVELOPMENT_TEAM` (as `make install` does)
 sign with a Developer ID; the release workflow does the same, plus notarization and
 stapling, once its signing secrets are set — and falls back to the ad‑hoc build
 until then. Hardened Runtime is always on.
+
+**Releases must be Developer ID‑signed.** Not for Gatekeeper — for Sparkle: an
+ad‑hoc signed copy can never install an update (see Download above), so an ad‑hoc
+release strands everyone who installs it.
 
 ## Contributing
 
