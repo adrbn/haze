@@ -8,11 +8,15 @@ struct HazeApp: App {
     @StateObject private var updater = UpdaterController()
 
     var body: some Scene {
-        MenuBarExtra("Haze", systemImage: "sparkles") {
+        // `.window`, not `.menu`: an NSMenu can't show wallpaper previews, and a
+        // list of bare names was unreadable past a handful of presets.
+        MenuBarExtra {
             MenuBarContent()
                 .environmentObject(model)
                 .environmentObject(updater)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }

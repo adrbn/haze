@@ -172,6 +172,17 @@ enum LibraryCategory: String, CaseIterable, Identifiable {
 
     var systemImage: String? { self == .favorites ? "star.fill" : nil }
 
+    /// Shorter labels for the menu-bar panel, where all six filters have to fit
+    /// in 340pt. Favorites drops to its star alone.
+    var compactTitle: String? {
+        switch self {
+        case .favorites: return nil
+        case .fluid: return "Fluid"
+        case .classic: return "Classic"
+        default: return title
+        }
+    }
+
     func matches(_ item: ContentItem, isFavorite: Bool) -> Bool {
         switch self {
         // "All" hides Classic 2D gradients to keep the main view clean — they
