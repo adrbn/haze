@@ -10,9 +10,22 @@ public final class PowerMonitor {
     /// Called (on main) whenever `shouldRender` changes.
     public var onShouldRenderChange: ((Bool) -> Void)?
 
+    /// Called (on main) shortly after the login/display session comes back —
+    /// system wake, display wake, screen unlock. Distinct from `shouldRender`:
+    /// nothing about *whether* to draw changed, but the WindowServer state the
+    /// wallpaper windows depend on was torn down while we were away, so they
+    /// have to be rebuilt (see `DisplayManager.rebuildForSessionResume`).
+    public var onSessionResumed: (() -> Void)?
+
+    /// How long to wait after the last resume notification before firing
+    /// `onSessionResumed`. They arrive in a burst (wake, screens wake, unlock),
+    /// and the window server needs a moment to settle before a rebuild takes.
+    public var sessionResumeDelay: TimeInterval = 1.5
+
     private var lastShouldRender: Bool
     private var powerSource: CFRunLoopSource?
     private var powerStateToken: NSObjectProtocol?
+    private var sessionResumeWork: DispatchWorkItem?
 
     public init(settings: AppSettings) {
         var initial = PlaybackPolicy()
@@ -25,6 +38,7 @@ public final class PowerMonitor {
     }
 
     deinit {
+        sessionResumeWork?.cancel()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)
@@ -104,13 +118,41 @@ public final class PowerMonitor {
     // MARK: Handlers
 
     @objc private func systemWillSleep() { policy.systemAsleep = true; emit() }
-    @objc private func systemDidWake() { policy.systemAsleep = false; refreshPowerState(); emit() }
+    @objc private func systemDidWake() {
+        policy.systemAsleep = false
+        refreshPowerState()
+        emit()
+        scheduleSessionResume()
+    }
     @objc private func screensDidSleep() { policy.displayAsleep = true; emit() }
-    @objc private func screensDidWake() { policy.displayAsleep = false; emit() }
+    @objc private func screensDidWake() {
+        policy.displayAsleep = false
+        emit()
+        scheduleSessionResume()
+    }
     @objc private func screenLocked() { policy.screenLocked = true; emit() }
-    @objc private func screenUnlocked() { policy.screenLocked = false; emit() }
+    @objc private func screenUnlocked() {
+        policy.screenLocked = false
+        emit()
+        scheduleSessionResume()
+    }
     @objc private func screensaverStarted() { policy.screensaverActive = true; emit() }
     @objc private func screensaverStopped() { policy.screensaverActive = false; emit() }
+
+    /// Coalesce the resume burst into a single callback, fired once things have
+    /// settled — waking, unlocking and the display coming back all land within
+    /// a second or so of each other and each one alone would trigger a rebuild.
+    private func scheduleSessionResume() {
+        guard onSessionResumed != nil else { return }
+        sessionResumeWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            Log.power.debug("session resumed — notifying")
+            self.onSessionResumed?()
+        }
+        sessionResumeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + sessionResumeDelay, execute: work)
+    }
 
     private func refreshPowerState() {
         policy.lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled

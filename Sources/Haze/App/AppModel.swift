@@ -72,42 +72,14 @@ final class AppModel: ObservableObject {
             self?.wallpaper.reaffirm()
         }
 
-        // Automatic one-shot "re-pick" that reproduces the ONLY context in which
-        // the wallpaper composites live through Space-slide transitions: a window
-        // (re)built while the app is `.regular`, not the `.accessory` menu-bar
-        // agent it launches as. That's exactly why a manual re-select fixes it —
-        // opening the settings window promotes the app to `.regular` first. A
-        // plain `apply()` in the background (`.accessory`) never worked at any
-        // delay (incl. the June +0.8s attempt). So: promote → activate → rebuild
-        // → drop back to `.accessory` (the window keeps the treatment for the
-        // session, just as it does after the user closes the settings window).
+        // One-shot re-apply once the window server has settled: at
+        // `applicationDidFinishLaunching` it is not ready yet, and the
+        // live-through-slide treatment silently fails to take (that's why the
+        // June +0.8s attempt didn't hold either). `WallpaperController` supplies
+        // the `.regular` activation context every build now runs in.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             guard let self, let current = self.currentWallpaper else { return }
-            self.applyWallpaperLive(current)
-        }
-    }
-
-    /// Apply a wallpaper so its window composites live through Space-slide
-    /// transitions. The window only gets that treatment when (re)built while the
-    /// app is `.regular` — not the `.accessory` menu-bar agent it runs as in the
-    /// background. So when we're an accessory (e.g. the user picked a preset from
-    /// the menu bar with no window open), briefly promote → activate for the
-    /// rebuild, then drop back to `.accessory` (the window keeps the treatment
-    /// for the session, exactly as it does after the settings window closes).
-    /// When a window is already open (`.regular`) this is just a normal apply.
-    private func applyWallpaperLive(_ item: ContentItem) {
-        let wasAccessory = NSApp.activationPolicy() == .accessory
-        // Promote to `.regular` for the rebuild (that's what gives the window its
-        // live-through-slide treatment) but DON'T `activate()` — we don't want to
-        // steal focus. If policy alone is enough, this is invisible bar a brief
-        // Dock-icon blip; if the treatment needs frontmost activation, the slide
-        // re-freezes and we restore the activate() call.
-        if wasAccessory { NSApp.setActivationPolicy(.regular) }
-        wallpaper.apply(item: item, settings: settings)
-        if wasAccessory {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                if NSApp.keyWindow == nil { NSApp.setActivationPolicy(.accessory) }
-            }
+            self.wallpaper.apply(item: current, settings: self.settings)
         }
     }
 
@@ -125,6 +97,18 @@ final class AppModel: ObservableObject {
         items.filter { $0.type == type }
     }
 
+    /// Recently applied wallpapers, most recent first, excluding the one already
+    /// playing (it gets its own always-on-top slot in the picker). IDs that no
+    /// longer resolve — deleted outside `deleteItem` — are skipped.
+    func recentWallpapers(limit: Int) -> [ContentItem] {
+        let currentID = settings.wallpaperItemID
+        return settings.recentItemIDs
+            .compactMap { id in items.first { $0.id.uuidString == id } }
+            .filter { $0.id != currentID }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     // MARK: Mutations
 
     func refresh() { items = library.items }
@@ -135,13 +119,20 @@ final class AppModel: ObservableObject {
 
     func setWallpaper(_ item: ContentItem) {
         settings.wallpaperItemID = item.id
-        // Route through applyWallpaperLive so a change made from the menu bar
-        // (app is `.accessory`, no window open) still composites live through
-        // Space slides — otherwise the rebuilt window gets snapshot-frozen again.
-        applyWallpaperLive(item)
+        noteRecentlyUsed(item)
+        wallpaper.apply(item: item, settings: settings)
         persist()
         currentWallpaperSpeed = speed(of: item)
         syncSystemWallpaper()
+    }
+
+    /// Push an item to the front of the recents list (most recent first), so the
+    /// menu-bar picker can surface what the user actually switches between.
+    private func noteRecentlyUsed(_ item: ContentItem) {
+        let id = item.id.uuidString
+        var recents = settings.recentItemIDs.filter { $0 != id }
+        recents.insert(id, at: 0)
+        settings.recentItemIDs = Array(recents.prefix(AppSettings.maxRecentItems))
     }
 
     /// Generate the wallpaper poster. It's ALWAYS shown behind the live view (so
@@ -306,6 +297,7 @@ final class AppModel: ObservableObject {
         if settings.screensaverItemID == item.id {
             settings.screensaverItemID = nil
         }
+        settings.recentItemIDs.removeAll { $0 == item.id.uuidString }
         persist()
     }
 

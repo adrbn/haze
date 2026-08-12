@@ -26,6 +26,16 @@ public final class DisplayManager {
     /// frame can't be captured, instead of a black gap.
     private var fallbackImageURL: URL?
 
+    /// Wraps *every* window (re)build so the host app can guarantee the
+    /// activation context the new windows need. A wallpaper window only gets the
+    /// WindowServer's live-through-Space-slide compositing treatment when it is
+    /// created while the owning app is `.regular`; one created by the background
+    /// `.accessory` agent is snapshot-frozen for the whole slide. That used to be
+    /// the caller's job, which meant every new rebuild site silently
+    /// reintroduced the freeze — so it lives here, at the one place windows are
+    /// born. `nil` (tests, previews) just builds directly.
+    public var rebuildContext: ((@escaping () -> Void) -> Void)?
+
     public init() {
         NotificationCenter.default.addObserver(
             self, selector: #selector(screenParametersChanged),
@@ -103,9 +113,25 @@ public final class DisplayManager {
         for entry in entries { entry.backing.image = image }
     }
 
+    /// Rebuild the windows for the item already on screen. The live-through-slide
+    /// treatment is granted by the WindowServer per login/display session, so a
+    /// screen lock or a system sleep silently revokes it from windows that
+    /// otherwise survive untouched — leaving the wallpaper frozen during Space
+    /// swipes until the user re-picked it by hand. Re-acquire it on resume.
+    public func rebuildForSessionResume() {
+        guard currentItem != nil else { return }
+        Log.display.info("Session resumed — rebuilding wallpaper windows")
+        rebuild()
+    }
+
     // MARK: Internals
 
     private func rebuild() {
+        guard let rebuildContext else { return performRebuild() }
+        rebuildContext { [weak self] in self?.performRebuild() }
+    }
+
+    private func performRebuild() {
         teardown()
         guard let item = currentItem else { return }
         for screen in NSScreen.screens {
