@@ -15,10 +15,18 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "15.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    # Local builds sign ad-hoc with no dev team; flip these for distribution.
+    # Signing is overridable so one project builds three ways without edits:
+    #   default        ad-hoc ("-") — no certificate needed, works for CI
+    #                  without signing secrets and for anyone cloning the repo
+    #   make install   passes a Developer ID (see Makefile): a stable identity,
+    #                  so macOS keeps granted permissions across rebuilds
+    #   tagged release CI passes it too, once the signing secrets exist
+    # Override with HAZE_CODE_SIGN_IDENTITY=… / HAZE_DEVELOPMENT_TEAM=… .
     CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "-"
-    DEVELOPMENT_TEAM: ""
+    HAZE_CODE_SIGN_IDENTITY: "-"
+    HAZE_DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: "$(HAZE_CODE_SIGN_IDENTITY)"
+    DEVELOPMENT_TEAM: "$(HAZE_DEVELOPMENT_TEAM)"
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGNING_ALLOWED: "YES"
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"

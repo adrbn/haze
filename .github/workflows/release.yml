@@ -17,10 +17,20 @@ name: Release
 # public half is SUPublicEDKey in Info.plist. That signature, not Apple's, is
 # what authenticates an update, so ad-hoc builds update safely.
 #
-# NOTE: still signed ad-hoc (no Apple Developer ID). First-time installs from the
-# DMG hit Gatekeeper (right-click -> Open, or `xattr -cr /Applications/Haze.app`).
-# Sparkle updates of an already-trusted copy are clean. Add Developer ID +
-# notarization later for a clean first install too.
+# Apple signing is OPTIONAL and detected at run time. Set all five secrets below
+# and the build is signed with the Developer ID certificate, notarized and
+# stapled, so a first install from the DMG opens with no Gatekeeper warning.
+# Leave any of them unset and the job falls back to the ad-hoc build it always
+# did (first install then needs right-click -> Open, or `xattr -cr`).
+#
+#   MACOS_CERTIFICATE          base64 of the Developer ID .p12
+#                              (`base64 -i cert.p12 | pbcopy`)
+#   MACOS_CERTIFICATE_PWD      the password set when exporting that .p12
+#   MACOS_SIGN_IDENTITY        e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_TEAM_ID              the 10-character team identifier
+#   NOTARY_KEY / NOTARY_KEY_ID / NOTARY_ISSUER_ID
+#                              App Store Connect API key (.p8 contents, key id,
+#                              issuer uuid) — preferred over an Apple ID password
 
 on:
   push:
@@ -67,20 +77,90 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
+      # Apple signing is all-or-nothing: without every secret we build ad-hoc
+      # exactly as before, so the workflow keeps working un-configured.
+      - name: Decide signing mode
+        id: signing
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          CERT_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+        run: |
+          if [[ -n "$CERT" && -n "$CERT_PWD" && -n "$IDENTITY" && -n "$TEAM" && -n "$NOTARY_KEY" ]]; then
+            echo "apple=true" >> "$GITHUB_OUTPUT"
+            echo "Signing with Developer ID + notarization"
+          else
+            echo "apple=false" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets absent — ad-hoc build (Gatekeeper warning on first install)"
+          fi
+
+      - name: Import signing certificate
+        if: steps.signing.outputs.apple == 'true'
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          CERT_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          set -euo pipefail
+          # Throwaway keychain, unlocked only for this job.
+          KEYCHAIN_PWD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security set-keychain-settings -lut 3600 build.keychain
+          echo "$CERT" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$CERT_PWD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f cert.p12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PWD" build.keychain >/dev/null
+          security find-identity -v -p codesigning build.keychain
+
       - name: Build (Release)
+        env:
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -o pipefail
+          if [[ "${{ steps.signing.outputs.apple }}" == "true" ]]; then
+            SIGN_ARGS=(HAZE_CODE_SIGN_IDENTITY="$IDENTITY" HAZE_DEVELOPMENT_TEAM="$TEAM"
+                       OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGNING_REQUIRED=YES)
+          else
+            SIGN_ARGS=(HAZE_CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO)
+          fi
           xcodebuild -project Haze.xcodeproj -scheme Haze \
             -configuration Release -derivedDataPath build \
             MARKETING_VERSION="${{ steps.ver.outputs.short }}" \
             CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
-            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_ALLOWED=YES "${SIGN_ARGS[@]}" \
             build
+
+      # Notarize the .app itself and staple the ticket into the bundle, before
+      # it is copied into the DMG and the Sparkle zip — so both carry it.
+      - name: Notarize and staple
+        if: steps.signing.outputs.apple == 'true'
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/Haze.app"
+          printf '%s' "$NOTARY_KEY" > notary.p8
+          ditto -c -k --sequesterRsrc --keepParent "$APP" notarize.zip
+          xcrun notarytool submit notarize.zip \
+            --key notary.p8 --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          rm -f notary.p8 notarize.zip
+          xcrun stapler staple "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
 
       - name: Package DMG
         run: |
           APP="build/Build/Products/Release/Haze.app"
-          codesign --force --deep --sign - "$APP"
+          if [[ "${{ steps.signing.outputs.apple }}" != "true" ]]; then
+            codesign --force --deep --sign - "$APP"
+          fi
           STAGE="$(mktemp -d)/dmg"
           mkdir -p "$STAGE"
           cp -R "$APP" "$STAGE/"
