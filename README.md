@@ -47,7 +47,7 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 - 🖼 **Match macOS wallpaper** — optionally sets a still of your wallpaper as the system desktop picture, so Mission Control, the lock screen, and login match the live one.
 - 🪶 **Lightweight by design** — pauses rendering when the desktop is fully covered, the display sleeps, the screen locks, or (optionally) on battery / Low Power Mode. Render resolution and frame rate are capped — ~0% CPU when occluded.
 - 🧊 **Native Liquid Glass UI** — real Liquid Glass on macOS 26, graceful `.ultraThinMaterial` fallback on 15.
-- ✨ **Menu‑bar agent** — no Dock clutter; switch wallpapers (grouped by category) or pause right from the menu bar.
+- ✨ **Menu‑bar picker** — no Dock clutter. A visual panel with what's playing pinned at the top, your recent wallpapers one click away, and the rest as a searchable, filterable thumbnail grid — plus pause and a speed slider.
 - 🚀 **Launch at login** — optional, one toggle.
 - 🔄 **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
 
@@ -76,12 +76,34 @@ make run          # generate the project, build, and launch
 # or step by step:
 make generate     # xcodegen → Haze.xcodeproj
 make build        # debug build
-make test         # run the HazeKit unit tests (56)
+make test         # run the HazeKit unit tests (64)
 make release      # optimized build
 ```
 
-Haze launches as a **menu‑bar** item (✨). Open the window from there, import media
-or pick a gradient, and click any tile to set it as your live wallpaper.
+Haze launches as a **menu‑bar** item. Click the glyph for the wallpaper picker, or
+open the full window from there to import media and edit gradients.
+
+### Signed local installs
+
+Builds are ad‑hoc signed by default, which needs no certificate — but the identity
+changes on every build, so macOS re‑asks for any permission it had granted. With an
+Apple **Developer ID** certificate in your keychain:
+
+```bash
+make install      # Developer ID-signed Release build → /Applications, relaunched
+make notarize     # submit to Apple and staple the ticket
+make verify-signature
+```
+
+`make notarize` needs a one-time `notarytool` keychain profile (it is never stored
+in the repo):
+
+```bash
+xcrun notarytool store-credentials haze --key AuthKey_XXXX.p8 --key-id KEYID --issuer ISSUER-UUID
+```
+
+The identity is prefix-matched, so nothing personal lives in the repo; override it
+with `make install SIGN_ID="Apple Development"`.
 
 ## Installing the screensaver
 
@@ -123,14 +145,19 @@ detection. When it says *don’t render*, every renderer pauses (video stops dec
 - [ ] **Per‑display** independent content
 - [ ] GIF → HEVC transcode‑on‑import for lighter playback
 - [x] In‑app auto‑update (Sparkle) with signed appcast
-- [ ] Notarized release (Developer ID) for a clean first‑open
+- [x] Developer ID signing + notarization pipeline (`make notarize`, opt-in CI secrets)
 
 ## Distribution notes
 
 Haze is **non‑sandboxed** — desktop‑window placement and screensaver installation
 are incompatible with the App Store sandbox, which also makes it **incompatible with
-the Mac App Store** (and GPL‑3.0 is too). Local builds sign **ad‑hoc**; to share a
-build, set a `DEVELOPMENT_TEAM`, keep Hardened Runtime on, and notarize.
+the Mac App Store** (and GPL‑3.0 is too).
+
+Signing is opt‑in everywhere, so the project builds with no certificate at all.
+Set `HAZE_CODE_SIGN_IDENTITY` / `HAZE_DEVELOPMENT_TEAM` (as `make install` does) to
+sign with a Developer ID; the release workflow does the same, plus notarization and
+stapling, once its signing secrets are set — and falls back to the ad‑hoc build
+until then. Hardened Runtime is always on.
 
 ## Contributing
 
