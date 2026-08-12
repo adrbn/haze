@@ -39,6 +39,13 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// Favourited item IDs (UUID strings).
     public var favoriteItemIDs: [String]
 
+    /// Recently applied wallpapers, most recent first (UUID strings). Drives the
+    /// "Recent" row of the menu-bar picker.
+    public var recentItemIDs: [String]
+
+    /// How many entries `recentItemIDs` keeps.
+    public static let maxRecentItems = 8
+
     /// Play audio for video wallpapers (off by default).
     public var videoSoundEnabled: Bool
 
@@ -65,6 +72,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 launchAtLogin: Bool = false,
                 seededGradientPresetIDs: [String] = [],
                 favoriteItemIDs: [String] = [],
+                recentItemIDs: [String] = [],
                 videoSoundEnabled: Bool = false,
                 navLayout: NavLayout = .sidebar,
                 barEdge: BarEdge = .top,
@@ -81,6 +89,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.launchAtLogin = launchAtLogin
         self.seededGradientPresetIDs = seededGradientPresetIDs
         self.favoriteItemIDs = favoriteItemIDs
+        self.recentItemIDs = recentItemIDs
         self.videoSoundEnabled = videoSoundEnabled
         self.navLayout = navLayout
         self.barEdge = barEdge
@@ -105,6 +114,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
         seededGradientPresetIDs = try c.decodeIfPresent([String].self, forKey: .seededGradientPresetIDs) ?? d.seededGradientPresetIDs
         favoriteItemIDs = try c.decodeIfPresent([String].self, forKey: .favoriteItemIDs) ?? d.favoriteItemIDs
+        recentItemIDs = try c.decodeIfPresent([String].self, forKey: .recentItemIDs) ?? d.recentItemIDs
         videoSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .videoSoundEnabled) ?? d.videoSoundEnabled
         navLayout = try c.decodeIfPresent(NavLayout.self, forKey: .navLayout) ?? d.navLayout
         barEdge = try c.decodeIfPresent(BarEdge.self, forKey: .barEdge) ?? d.barEdge
