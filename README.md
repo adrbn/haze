@@ -37,6 +37,8 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 
 <img src="assets/library.png" width="820" alt="Haze — the wallpaper library, grouped by category">
 
+<img src="assets/menubar.png" width="300" alt="Haze — the menu-bar wallpaper picker: now playing, recents, and a searchable grid">
+
 </div>
 
 ## Features
