@@ -10,7 +10,19 @@ struct WallpapersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var category: LibraryCategory = .all
 
-    private var shown: [ContentItem] { model.items(in: category) }
+    /// The playing wallpaper is floated to the front, as the menu-bar panel
+    /// already does. With twenty-odd gradients in a category, "it is marked
+    /// somewhere in the grid" is not findable — you had to scroll hunting for a
+    /// ring. The cost is that picking a tile moves it to the top, so the
+    /// reorder is animated rather than a jump.
+    private var shown: [ContentItem] {
+        let all = model.items(in: category)
+        guard let current = model.settings.wallpaperItemID,
+              let index = all.firstIndex(where: { $0.id == current }) else { return all }
+        var reordered = all
+        reordered.insert(reordered.remove(at: index), at: 0)
+        return reordered
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,6 +57,7 @@ struct WallpapersView: View {
                             .contextMenu { menu(for: item) }
                         }
                     }
+                    .animation(.smooth(duration: 0.35), value: model.settings.wallpaperItemID)
                     .padding(24)
                 }
             }
@@ -95,12 +108,22 @@ struct WallpapersView: View {
         }
         Button("Set as Wallpaper") { model.setWallpaper(item) }
         Button("Use as Screensaver") { model.setScreensaver(item) }
+        Button("Edit…") { edit(item) }
         if item.type.isGradient {
-            Button("Edit…") { AppDelegate.shared?.showGradientEditor(.existing(item)) }
             Button("Duplicate") { duplicate(item) }
         }
         Divider()
         Button("Delete", role: .destructive) { model.deleteItem(item) }
+    }
+
+    /// Gradients open the gradient editor; everything else opens the media
+    /// adjustments. Every item in the library has something to edit.
+    private func edit(_ item: ContentItem) {
+        if item.type.isGradient {
+            AppDelegate.shared?.showGradientEditor(.existing(item))
+        } else {
+            AppDelegate.shared?.showMediaEditor(item)
+        }
     }
 
     private func duplicate(_ item: ContentItem) {

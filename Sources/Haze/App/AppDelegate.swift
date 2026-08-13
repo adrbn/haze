@@ -114,6 +114,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Adjustments for a file-backed item. Shares `editorWindow` with the
+    /// gradient editor — only one editor is ever meaningful at a time, and
+    /// reusing the slot means closing one cannot orphan the other.
+    func showMediaEditor(_ item: ContentItem) {
+        let close: () -> Void = { [weak self] in
+            self?.editorWindow?.close()
+            self?.editorWindow = nil
+        }
+
+        let root = MediaSettingsView(item: item, onClose: close).environmentObject(model)
+        let window = NSWindow(contentViewController: NSHostingController(rootView: root))
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.title = ""
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.isMovableByWindowBackground = true
+        window.center()
+        editorWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
     func windowWillClose(_ notification: Notification) {
         // Back to background agent once the UI is dismissed.
         DispatchQueue.main.async {
