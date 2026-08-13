@@ -74,25 +74,7 @@ xcodebuild -project Haze.xcodeproj -scheme Haze -configuration Release -derivedD
 # Re-sign them deepest-first, preserving their own entitlements, then the
 # framework, then the app — whose seal covers everything below it.
 step "Re-signing Sparkle's nested helpers"
-harden() {
-  codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
-    --sign "$SIGN_ID" "$1" >/dev/null 2>&1 || die "Could not re-sign $1"
-  echo "  signed $(basename "$1")"
-}
-SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
-[ -d "$SPARKLE" ] || die "Sparkle.framework missing from the build."
-for version in "$SPARKLE"/Versions/*/; do
-  version="${version%/}"
-  [ "$(basename "$version")" != "Current" ] || continue    # symlink to the real one
-  for helper in "$version"/XPCServices/*.xpc "$version"/Updater.app "$version"/Autoupdate; do
-    [ -e "$helper" ] && harden "$helper"
-  done
-  harden "$version"
-done
-# The app carries no entitlements of its own — do not preserve, so the debug
-# `get-task-allow` can never sneak back in.
-codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP" >/dev/null 2>&1 \
-  || die "Could not re-sign the app."
+./scripts/sign_sparkle.sh "$APP" "$SIGN_ID" || die "Could not re-sign Sparkle's helpers."
 
 codesign --verify --deep --strict "$APP" || die "The build is not properly signed."
 ENTITLEMENTS="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)"
