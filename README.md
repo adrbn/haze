@@ -59,14 +59,16 @@ Grab the latest **[`Haze.dmg`](https://github.com/adrbn/haze/releases/latest)** 
 Releases, drag it to Applications, and launch.
 
 > [!IMPORTANT]
-> **An ad‑hoc signed copy cannot auto‑update — v0.1.0 included.** Sparkle refuses to
+> **An ad‑hoc signed copy cannot auto‑update — which is every release up to and
+> including v0.1.3.** Sparkle refuses to
 > install an update whose code signature doesn't match the installed app's, and an
 > ad‑hoc binary's designated requirement *is its own cdhash*, which changes with
 > every build. So the check can never pass, whatever the update is signed with.
 > Verified on‑device: Sparkle logs `Code signature of the new version doesn't match
 > the old version` and silently stops; the same update installs fine when both
-> copies carry the same Developer ID. If you are on v0.1.0, download the DMG once by
-> hand — from a Developer ID‑signed build onward, in‑app updates work.
+> copies carry the same Developer ID. If you already have Haze installed, download
+> the DMG once by hand — from a Developer ID‑signed build onward, in‑app updates
+> work on their own.
 
 Builds that are not signed with a Developer ID also trip Gatekeeper on first open:
 open **System Settings → Privacy & Security → Open Anyway**, or run
@@ -124,7 +126,7 @@ with `make install SIGN_ID="Apple Development"`.
 ## Cutting a release
 
 ```bash
-make release-publish TAG=v0.1.1
+make release-publish TAG=v0.1.4
 ```
 
 Builds a signed Release, notarizes and staples it, packages the DMG and the
