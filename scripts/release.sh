@@ -64,9 +64,41 @@ xcodebuild -project Haze.xcodeproj -scheme Haze -configuration Release -derivedD
   MARKETING_VERSION="$SHORT" CURRENT_PROJECT_VERSION="$BUILD" \
   HAZE_CODE_SIGN_IDENTITY="$SIGN_ID" HAZE_DEVELOPMENT_TEAM="$TEAM_ID" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
   build > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; die "Build failed — full log: $OUT/build.log"; }
 
+# Xcode signs the targets it builds, but not the code *inside* a binary package
+# dependency: Sparkle ships a helper app, a bare Autoupdate binary and two XPC
+# services that stay ad-hoc, and Apple rejects the whole archive for them
+# ("not signed with a valid Developer ID certificate", "no secure timestamp").
+# Re-sign them deepest-first, preserving their own entitlements, then the
+# framework, then the app — whose seal covers everything below it.
+step "Re-signing Sparkle's nested helpers"
+harden() {
+  codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+    --sign "$SIGN_ID" "$1" >/dev/null 2>&1 || die "Could not re-sign $1"
+  echo "  signed $(basename "$1")"
+}
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+[ -d "$SPARKLE" ] || die "Sparkle.framework missing from the build."
+for version in "$SPARKLE"/Versions/*/; do
+  version="${version%/}"
+  [ "$(basename "$version")" != "Current" ] || continue    # symlink to the real one
+  for helper in "$version"/XPCServices/*.xpc "$version"/Updater.app "$version"/Autoupdate; do
+    [ -e "$helper" ] && harden "$helper"
+  done
+  harden "$version"
+done
+# The app carries no entitlements of its own — do not preserve, so the debug
+# `get-task-allow` can never sneak back in.
+codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP" >/dev/null 2>&1 \
+  || die "Could not re-sign the app."
+
 codesign --verify --deep --strict "$APP" || die "The build is not properly signed."
+ENTITLEMENTS="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)"
+if contains "get-task-allow" "$ENTITLEMENTS"; then
+  die "The app still requests get-task-allow — Apple rejects that in a release."
+fi
 SIGN_INFO="$(codesign -dv --verbose=2 "$APP" 2>&1 || true)"
 contains "Authority=Developer ID Application" "$SIGN_INFO" \
   || die "The build is not Developer ID-signed — an ad-hoc release can never auto-update."
@@ -74,8 +106,20 @@ contains "Authority=Developer ID Application" "$SIGN_INFO" \
 # ---------------------------------------------------------------- notarize
 step "Notarizing (Apple usually answers in 1-5 min)"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/notarize.zip"
-xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait \
-  || die "Notarization was rejected — see the log above."
+# `notarytool submit --wait` exits 0 as long as it got an answer — including
+# "Invalid". Read the verdict, not the exit code, or a rejected build sails on
+# to stapling and fails there with an unrelated-looking error.
+NOTARY_OUT="$(xcrun notarytool submit "$OUT/notarize.zip" \
+  --keychain-profile "$NOTARY_PROFILE" --wait 2>&1 || true)"
+printf '%s\n' "$NOTARY_OUT"
+SUBMISSION_ID="$(printf '%s\n' "$NOTARY_OUT" | sed -n 's/^ *id: \([0-9a-f-]*\)$/\1/p' | sed -n '1p')"
+if ! contains "status: Accepted" "$NOTARY_OUT"; then
+  printf '\n\033[1mApple rejected it. Reasons:\033[0m\n'
+  [ -n "$SUBMISSION_ID" ] && xcrun notarytool log "$SUBMISSION_ID" \
+    --keychain-profile "$NOTARY_PROFILE" 2>&1 || true
+  die "Notarization failed — nothing was published."
+fi
+
 xcrun stapler staple "$APP" || die "Stapling failed."
 # spctl exits non-zero when it rejects, so read its verdict rather than its status.
 GATEKEEPER="$(spctl --assess --type execute --verbose=2 "$APP" 2>&1 || true)"
