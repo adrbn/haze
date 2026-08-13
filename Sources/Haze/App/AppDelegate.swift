@@ -30,7 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func showMainWindow() {
         if mainWindow == nil {
-            let root = MainWindowView().environmentObject(model)
+            let root = MainWindowView()
+                .environmentObject(model)
+                .environmentObject(UpdaterController.shared)
             let hosting = NSHostingController(rootView: root)
             let window = NSWindow(contentViewController: hosting)
             window.title = ""

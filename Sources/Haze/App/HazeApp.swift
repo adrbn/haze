@@ -5,7 +5,7 @@ import HazeKit
 struct HazeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel.shared
-    @StateObject private var updater = UpdaterController()
+    @StateObject private var updater = UpdaterController.shared
 
     var body: some Scene {
         // `.window`, not `.menu`: an NSMenu can't show wallpaper previews, and a

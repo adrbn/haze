@@ -14,6 +14,11 @@ import Sparkle
 /// `SUPublicEDKey`, so ad-hoc-signed builds still update safely.
 @MainActor
 final class UpdaterController: ObservableObject {
+    /// Sparkle expects a single updater per process, and both the menu bar and
+    /// the About page drive it — so it is shared rather than owned by whichever
+    /// view happened to be built first.
+    static let shared = UpdaterController()
+
     /// Drives the enabled state of the "Check for Updates…" menu item.
     @Published private(set) var canCheckForUpdates = false
 

@@ -176,7 +176,7 @@ jobs:
           echo "Built $(du -h Haze.dmg | cut -f1) DMG"
 
       - name: Build Sparkle zip + signed appcast
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.apple == 'true'
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
@@ -217,8 +217,14 @@ jobs:
           name: Haze-dmg
           path: Haze.dmg
 
+      # Publishing is gated on Apple signing, not just on being a tag. The local
+      # release script pushes the tag itself, which fires this workflow; without
+      # the signing secrets it would rebuild ad-hoc and overwrite the signed,
+      # notarized assets that were just uploaded — handing every downloader a
+      # copy that can never auto-update. An unsigned run still builds and
+      # uploads its artifact, so the branch is verified; it just cannot publish.
       - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.signing.outputs.apple == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: |

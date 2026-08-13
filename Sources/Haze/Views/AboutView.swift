@@ -5,6 +5,8 @@ import HazeKit
 /// The About page: app identity (icon · name · version · author) and two action
 /// buttons — a GitHub link and a Ko-fi donate button.
 struct AboutView: View {
+    @EnvironmentObject private var updater: UpdaterController
+
     private let githubURL = URL(string: "https://github.com/adrbn/haze")!
     private let donateURL = URL(string: "https://ko-fi.com/adrbn")!
 
@@ -21,6 +23,7 @@ struct AboutView: View {
                     Text("Version \(HazeKit.version)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    updateButton
                     Text("Live wallpapers, a matching screensaver, and animated Metal gradients — native, lightweight, free.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -66,6 +69,21 @@ struct AboutView: View {
             .frame(width: 104, height: 104)
             .clipShape(RoundedRectangle(cornerRadius: 23, style: .continuous))
             .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+    }
+
+    /// Checking for updates was reachable only from the menu bar, which is not
+    /// where anyone looks for it once the window is open.
+    private var updateButton: some View {
+        Button {
+            updater.checkForUpdates()
+        } label: {
+            Label(updater.canCheckForUpdates ? "Check for Updates…" : "Checking…",
+                  systemImage: "arrow.triangle.2.circlepath")
+                .font(.callout)
+        }
+        .buttonStyle(.link)
+        .disabled(!updater.canCheckForUpdates)
+        .padding(.top, 2)
     }
 
     private var githubButton: some View {
