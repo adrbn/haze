@@ -52,26 +52,33 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 - ✨ **Menu‑bar picker** — no Dock clutter. A visual panel with what's playing pinned at the top, your recent wallpapers one click away, and the rest as a searchable, filterable thumbnail grid — plus pause and a speed slider.
 - 🚀 **Launch at login** — optional, one toggle.
 - 🔄 **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
+- 🔏 **Signed and notarized** — Developer ID, hardened runtime, Apple‑notarized with the ticket stapled, so it opens on a double‑click.
 
 ## Download
 
 Grab the latest **[`Haze.dmg`](https://github.com/adrbn/haze/releases/latest)** from
-Releases, drag it to Applications, and launch.
+Releases, drag it to Applications, and launch. From **v0.1.4** the app is signed
+with a Developer ID and notarized by Apple, with the ticket stapled — it opens on a
+double‑click, with no Gatekeeper warning and no `xattr` incantation, and it keeps
+itself up to date from there.
 
 > [!IMPORTANT]
-> **An ad‑hoc signed copy cannot auto‑update — which is every release up to and
-> including v0.1.3.** Sparkle refuses to
-> install an update whose code signature doesn't match the installed app's, and an
-> ad‑hoc binary's designated requirement *is its own cdhash*, which changes with
-> every build. So the check can never pass, whatever the update is signed with.
-> Verified on‑device: Sparkle logs `Code signature of the new version doesn't match
-> the old version` and silently stops; the same update installs fine when both
-> copies carry the same Developer ID. If you already have Haze installed, download
-> the DMG once by hand — from a Developer ID‑signed build onward, in‑app updates
-> work on their own.
+> **Already running v0.1.3 or earlier? Update by hand, once.** Those builds were
+> ad‑hoc signed, and an ad‑hoc copy can never auto‑update — so they will sit on
+> their version forever, silently, without ever telling you an update exists.
+> Download the DMG above and replace the app; every update after that is automatic.
+>
+> Why: Sparkle refuses an update whose code signature doesn't match the installed
+> app's, and an ad‑hoc binary's designated requirement *is its own cdhash*, which
+> changes with every build — so the check can never pass, whatever the update is
+> signed with. Verified on‑device across three runs: ad‑hoc → Developer ID fails,
+> ad‑hoc → ad‑hoc fails (which rules out the certificate change as the cause), and
+> Developer ID → Developer ID installs and relaunches cleanly. Sparkle logs
+> `Code signature of the new version doesn't match the old version` and stops.
 
-Builds that are not signed with a Developer ID also trip Gatekeeper on first open:
-open **System Settings → Privacy & Security → Open Anyway**, or run
+A build you compile yourself is ad‑hoc signed unless you pass a Developer ID (see
+[Signed local installs](#signed-local-installs)), so it will trip Gatekeeper on
+first open: **System Settings → Privacy & Security → Open Anyway**, or
 `xattr -cr /Applications/Haze.app`.
 
 ## Requirements
@@ -190,7 +197,7 @@ detection. When it says *don’t render*, every renderer pauses (video stops dec
 - [ ] **Per‑display** independent content
 - [ ] GIF → HEVC transcode‑on‑import for lighter playback
 - [x] In‑app auto‑update (Sparkle) with signed appcast
-- [x] Developer ID signing + notarization pipeline (`make notarize`, opt-in CI secrets)
+- [x] Developer ID signing, notarization and stapling — shipped in v0.1.4, one command (`make release-publish`)
 
 ## Distribution notes
 
