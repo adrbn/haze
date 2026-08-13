@@ -24,6 +24,11 @@ REPO_SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
 die() { printf '\n\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$1"; }
 
+# `cmd | grep -q needle` is a trap here: grep exits at the first match, cmd then
+# dies of SIGPIPE (141), and `set -o pipefail` reports the whole pipeline as
+# failed — precisely when the match SUCCEEDED. Capture first, match after.
+contains() { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
+
 [ -n "$TAG" ] || die "Usage: ./scripts/release.sh vX.Y.Z"
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Tag must look like v0.1.1 (got '$TAG')"
 
@@ -36,7 +41,8 @@ git fetch --quiet --tags
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && die "Tag $TAG already exists."
 [ "$(git rev-parse HEAD)" = "$(git rev-parse @{u})" ] || die "Local main differs from origin — push or pull first."
 
-TEAM_ID="$(security find-identity -v -p codesigning | grep -m1 "$SIGN_ID" | sed -n 's/.*(\([A-Z0-9]\{10\}\))".*/\1/p')"
+IDENTITIES="$(security find-identity -v -p codesigning || true)"
+TEAM_ID="$(printf '%s\n' "$IDENTITIES" | grep "$SIGN_ID" | sed -n 's/.*(\([A-Z0-9]\{10\}\))".*/\1/p' | sed -n '1p')"
 [ -n "$TEAM_ID" ] || die "No '$SIGN_ID' certificate in your keychain."
 
 xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
@@ -61,7 +67,8 @@ xcodebuild -project Haze.xcodeproj -scheme Haze -configuration Release -derivedD
   build > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; die "Build failed — full log: $OUT/build.log"; }
 
 codesign --verify --deep --strict "$APP" || die "The build is not properly signed."
-codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Authority=Developer ID Application" \
+SIGN_INFO="$(codesign -dv --verbose=2 "$APP" 2>&1 || true)"
+contains "Authority=Developer ID Application" "$SIGN_INFO" \
   || die "The build is not Developer ID-signed — an ad-hoc release can never auto-update."
 
 # ---------------------------------------------------------------- notarize
@@ -70,8 +77,10 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/notarize.zip"
 xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait \
   || die "Notarization was rejected — see the log above."
 xcrun stapler staple "$APP" || die "Stapling failed."
-spctl --assess --type execute --verbose=2 "$APP" 2>&1 | grep -q "accepted" \
-  || die "Gatekeeper still rejects the app after notarization."
+# spctl exits non-zero when it rejects, so read its verdict rather than its status.
+GATEKEEPER="$(spctl --assess --type execute --verbose=2 "$APP" 2>&1 || true)"
+contains "accepted" "$GATEKEEPER" \
+  || die "Gatekeeper still rejects the app after notarization: $GATEKEEPER"
 echo "  Gatekeeper: accepted"
 
 # ---------------------------------------------------------------- package
