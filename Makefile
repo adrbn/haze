@@ -14,11 +14,11 @@ TEAM_ID ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
 SIGNED_FLAGS = HAZE_CODE_SIGN_IDENTITY="$(SIGN_ID)" HAZE_DEVELOPMENT_TEAM="$(TEAM_ID)" \
                OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGNING_REQUIRED=YES
 
-# Keychain profile created once with:
-#   xcrun notarytool store-credentials haze --apple-id … --team-id … --password …
+# Keychain profile, created once with an App Store Connect API key:
+#   xcrun notarytool store-credentials haze --key AuthKey_XXX.p8 --key-id KEYID --issuer ISSUER
 NOTARY_PROFILE ?= haze
 
-.PHONY: all generate build test release release-signed run install install-saver notarize verify-signature clean
+.PHONY: all generate build test release release-signed release-publish run install install-saver notarize verify-signature clean
 
 all: build
 
@@ -75,6 +75,15 @@ notarize: release-signed
 	xcrun stapler staple "$(RELEASE_APP)"
 	@rm -f Haze-notarize.zip
 	@$(MAKE) verify-signature APP="$(RELEASE_APP)"
+
+## Cut a release from this Mac: signed, notarized, stapled, DMG + Sparkle
+## archive + appcast, published to GitHub. Needs only the notary profile above —
+## the certificate is already in your keychain, which is the whole reason this
+## is simpler than the CI path.
+##   make release-publish TAG=v0.1.1
+release-publish: generate
+	@test -n "$(TAG)" || { echo "Usage: make release-publish TAG=v0.1.1"; exit 1; }
+	@NOTARY_PROFILE="$(NOTARY_PROFILE)" SIGN_ID="$(SIGN_ID)" ./scripts/release.sh "$(TAG)"
 
 install-saver: build
 	@mkdir -p "$(SAVER_DIR)"

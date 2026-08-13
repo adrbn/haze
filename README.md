@@ -110,7 +110,9 @@ make verify-signature
 ```
 
 `make notarize` needs a one-time `notarytool` keychain profile (it is never stored
-in the repo):
+in the repo). Create an App Store Connect API key under **Users and Access →
+Integrations → Team Keys**, download the `.p8` (once only — it cannot be
+re-downloaded), then:
 
 ```bash
 xcrun notarytool store-credentials haze --key AuthKey_XXXX.p8 --key-id KEYID --issuer ISSUER-UUID
@@ -118,6 +120,33 @@ xcrun notarytool store-credentials haze --key AuthKey_XXXX.p8 --key-id KEYID --i
 
 The identity is prefix-matched, so nothing personal lives in the repo; override it
 with `make install SIGN_ID="Apple Development"`.
+
+## Cutting a release
+
+```bash
+make release-publish TAG=v0.1.1
+```
+
+Builds a signed Release, notarizes and staples it, packages the DMG and the
+Sparkle archive, generates the signed appcast, then tags and publishes the GitHub
+release — asking for confirmation before anything becomes public. Every
+precondition (clean tree, unused tag, certificate, notary profile, Sparkle key) is
+checked up front, so a failure never leaves a half-published release.
+
+The one-time setup is the notary profile above. Nothing else: the certificate is
+already in your keychain.
+
+<details>
+<summary>Releasing from CI instead</summary>
+
+`.github/workflows/release.yml` does the same on a tag push, but a runner has no
+keychain — which is the only reason it needs the certificate exported as a `.p12`,
+base64-encoded, and split across repo secrets (`MACOS_CERTIFICATE`,
+`MACOS_CERTIFICATE_PWD`, `MACOS_SIGN_IDENTITY`, `APPLE_TEAM_ID`, `NOTARY_KEY`,
+`NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, plus `SPARKLE_ED_PRIVATE_KEY`). Without all
+of them it falls back to an ad-hoc build — which cannot auto-update, so prefer the
+local path unless you need releases without your Mac.
+</details>
 
 ## Installing the screensaver
 
