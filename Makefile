@@ -48,7 +48,11 @@ release-signed: generate
 	@test -n "$(TEAM_ID)" || { echo "No '$(SIGN_ID)' certificate in the keychain."; exit 1; }
 	@echo "Signing as '$(SIGN_ID)' (team $(TEAM_ID))"
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination '$(DEST)' \
-		$(SIGNED_FLAGS) $(STAMP) build
+		$(SIGNED_FLAGS) $(STAMP) CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO build
+	@APP=$$(find $(HOME)/Library/Developer/Xcode/DerivedData/Haze-*/Build/Products/Release \
+	          -maxdepth 1 -name Haze.app 2>/dev/null | sed -n '1p'); \
+	 test -n "$$APP" || { echo "No Release Haze.app found after the build"; exit 1; }; \
+	 ./scripts/sign_sparkle.sh "$$APP" "$(SIGN_ID)"
 
 run: build
 	@open "$(DEBUG_APP)" && echo "Launched $(DEBUG_APP) (look for the Haze glyph in the menu bar)"
