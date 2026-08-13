@@ -7,7 +7,7 @@
 # so releasing from here skips all of that. What's left is one Apple API key,
 # stored once by `notarytool` (see README).
 #
-#   ./scripts/release.sh v0.1.1
+#   ./scripts/release.sh v0.1.4
 #
 # Everything is checked before anything is published: the tree has to be clean,
 # the tag unused, the certificate present, the notary profile stored, and the
@@ -43,8 +43,6 @@ xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
   || die "No notary profile '$NOTARY_PROFILE'. Run: xcrun notarytool store-credentials $NOTARY_PROFILE --key AuthKey_XXX.p8 --key-id KEYID --issuer ISSUER"
 
 [ -f "$SPARKLE_KEY" ] || die "Missing $SPARKLE_KEY — without it, installed copies reject the update."
-SIGN_UPDATE="$(find "$HOME/Library/Developer/Xcode/DerivedData/Haze-"*/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update 2>/dev/null | head -1)"
-[ -x "$SIGN_UPDATE" ] || die "Sparkle's sign_update not found — run 'make build' once to resolve the package."
 
 SHORT="${TAG#v}"
 BUILD="$(git rev-list --count HEAD)"
@@ -88,6 +86,12 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/Haze.zip"
 PREV="$(git describe --tags --abbrev=0 2>/dev/null || true)"
 git log --no-merges --pretty='%s' ${PREV:+"$PREV"..}HEAD > "$OUT/notes.txt"
 
+# Sparkle's signing tool ships as a package artifact. Take it from the build we
+# just made — Xcode's shared DerivedData is a cache that tools like CleanMyMac
+# wipe, and the appcast is unsignable without it.
+SIGN_UPDATE="build/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update"
+[ -x "$SIGN_UPDATE" ] || die "sign_update missing from the build at $SIGN_UPDATE"
+
 python3 scripts/make_appcast.py \
   --sign-update "$SIGN_UPDATE" --key-file "$SPARKLE_KEY" \
   --zip "$OUT/Haze.zip" --short "$SHORT" --build "$BUILD" \
@@ -112,5 +116,5 @@ gh release create "$TAG" \
 printf '\n\033[32m✓ Released %s\033[0m — signed, notarized, stapled, appcast published.\n' "$TAG"
 echo "  https://github.com/$REPO_SLUG/releases/tag/$TAG"
 echo
-echo "Note: anyone still on an ad-hoc build (v0.1.0) will NOT get this update"
-echo "automatically — they have to download the DMG once by hand."
+echo "Note: everyone on an ad-hoc build (every release up to v0.1.3) will NOT get"
+echo "this update automatically — they have to download the DMG once by hand."

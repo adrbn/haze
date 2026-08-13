@@ -14,6 +14,14 @@ TEAM_ID ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
 SIGNED_FLAGS = HAZE_CODE_SIGN_IDENTITY="$(SIGN_ID)" HAZE_DEVELOPMENT_TEAM="$(TEAM_ID)" \
                OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGNING_REQUIRED=YES
 
+# Version stamping, taken from git like the release does. project.yml carries a
+# fixed placeholder, so without this an installed local build declares itself
+# older than the latest published release — and Sparkle then offers that release
+# as an "update" to a copy that is actually newer.
+VERSION ?= $(patsubst v%,%,$(shell git describe --tags --abbrev=0 2>/dev/null))
+BUILD   ?= $(shell git rev-list --count HEAD 2>/dev/null)
+STAMP    = $(if $(VERSION),MARKETING_VERSION="$(VERSION)" CURRENT_PROJECT_VERSION="$(BUILD)",)
+
 # Keychain profile, created once with an App Store Connect API key:
 #   xcrun notarytool store-credentials haze --key AuthKey_XXX.p8 --key-id KEYID --issuer ISSUER
 NOTARY_PROFILE ?= haze
@@ -40,7 +48,7 @@ release-signed: generate
 	@test -n "$(TEAM_ID)" || { echo "No '$(SIGN_ID)' certificate in the keychain."; exit 1; }
 	@echo "Signing as '$(SIGN_ID)' (team $(TEAM_ID))"
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -destination '$(DEST)' \
-		$(SIGNED_FLAGS) build
+		$(SIGNED_FLAGS) $(STAMP) build
 
 run: build
 	@open "$(DEBUG_APP)" && echo "Launched $(DEBUG_APP) (look for the Haze glyph in the menu bar)"
@@ -80,9 +88,9 @@ notarize: release-signed
 ## archive + appcast, published to GitHub. Needs only the notary profile above —
 ## the certificate is already in your keychain, which is the whole reason this
 ## is simpler than the CI path.
-##   make release-publish TAG=v0.1.1
+##   make release-publish TAG=v0.1.4
 release-publish: generate
-	@test -n "$(TAG)" || { echo "Usage: make release-publish TAG=v0.1.1"; exit 1; }
+	@test -n "$(TAG)" || { echo "Usage: make release-publish TAG=v0.1.4"; exit 1; }
 	@NOTARY_PROFILE="$(NOTARY_PROFILE)" SIGN_ID="$(SIGN_ID)" ./scripts/release.sh "$(TAG)"
 
 install-saver: build
