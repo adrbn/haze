@@ -23,7 +23,6 @@ struct AboutView: View {
                     Text("Version \(HazeKit.version)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    updateButton
                     Text("Live wallpapers, a matching screensaver, and animated Metal gradients — native, lightweight, free.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -45,6 +44,10 @@ struct AboutView: View {
                     donateButton
                 }
                 .padding(.top, 4)
+
+                updateStatus
+                    .padding(.top, 6)
+                    .animation(.smooth(duration: 0.3), value: updater.status)
 
                 Spacer(minLength: 0)
 
@@ -71,19 +74,62 @@ struct AboutView: View {
             .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
     }
 
-    /// Checking for updates was reachable only from the menu bar, which is not
-    /// where anyone looks for it once the window is open.
-    private var updateButton: some View {
-        Button {
-            updater.checkForUpdates()
-        } label: {
-            Label(updater.canCheckForUpdates ? "Check for Updates…" : "Checking…",
-                  systemImage: "arrow.triangle.2.circlepath")
-                .font(.callout)
+    /// The update state, stated plainly, below the actions.
+    ///
+    /// This replaced a blue `.link` button wedged under the version number: a
+    /// link reads as navigation, it fought the version for attention, and
+    /// pressing it was the only way to learn whether an update even existed.
+    /// The app now knows before you ask, and only raises its voice when there
+    /// is something to install.
+    @ViewBuilder
+    private var updateStatus: some View {
+        switch updater.status {
+        case .available(let version):
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Haze \(version) is available")
+                        .font(.callout.weight(.semibold))
+                    Text("Currently on \(HazeKit.version)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Button("Update…") { updater.checkForUpdates() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: 420)
+            .background(Color.accentColor.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1))
+
+        case .checking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Checking for updates…")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        case .upToDate, .unknown:
+            HStack(spacing: 6) {
+                if updater.status == .upToDate {
+                    Image(systemName: "checkmark.circle")
+                    Text("Up to date")
+                }
+                Button("Check again") { updater.checkForUpdates() }
+                    .buttonStyle(.plain)
+                    .underline()
+                    .disabled(!updater.canCheckForUpdates)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .buttonStyle(.link)
-        .disabled(!updater.canCheckForUpdates)
-        .padding(.top, 2)
     }
 
     private var githubButton: some View {

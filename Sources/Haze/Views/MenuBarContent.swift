@@ -269,7 +269,12 @@ struct MenuBarContent: View {
                 AppDelegate.shared?.showMainWindow()
             }
             Spacer(minLength: 0)
-            FooterButton(title: "Updates", systemImage: "arrow.triangle.2.circlepath") {
+            // An available update is announced where the app actually lives.
+            // Buried in a window nobody opens, the news never arrives.
+            FooterButton(title: updater.status.isAvailable ? "Update ready" : "Updates",
+                         systemImage: updater.status.isAvailable
+                            ? "arrow.down.circle.fill" : "arrow.triangle.2.circlepath",
+                         highlighted: updater.status.isAvailable) {
                 updater.checkForUpdates()
             }
             .disabled(!updater.canCheckForUpdates)
@@ -336,6 +341,7 @@ private struct WallpaperTile: View {
 private struct FooterButton: View {
     let title: String
     let systemImage: String
+    var highlighted = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -344,10 +350,13 @@ private struct FooterButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: highlighted ? .semibold : .medium))
+                .foregroundStyle(highlighted ? Color.accentColor : Color.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(hovering && isEnabled ? Color.primary.opacity(0.09) : .clear,
+                .background(highlighted
+                            ? Color.accentColor.opacity(0.15)
+                            : (hovering && isEnabled ? Color.primary.opacity(0.09) : .clear),
                             in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
