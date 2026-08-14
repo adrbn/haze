@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import AppKit
 import Sparkle
 
 /// What the app currently knows about updates.
@@ -49,7 +50,7 @@ final class UpdaterController: NSObject, ObservableObject, SPUUpdaterDelegate {
         // startingUpdater: true → Sparkle runs its scheduled background checks.
         controller = SPUStandardUpdaterController(startingUpdater: true,
                                                   updaterDelegate: self,
-                                                  userDriverDelegate: nil)
+                                                  userDriverDelegate: self)
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
         lastCheck = controller.updater.lastUpdateCheckDate
@@ -72,7 +73,21 @@ final class UpdaterController: NSObject, ObservableObject, SPUUpdaterDelegate {
     /// Manual check — shows Sparkle's UI even when already up to date, and is
     /// also how an offered update actually gets installed.
     func checkForUpdates() {
+        comeToFront()
         controller.updater.checkForUpdates()
+    }
+
+    /// Haze runs as an `LSUIElement` agent, so it owns no Dock tile and is never
+    /// the active app on its own. Sparkle's update window is an ordinary window:
+    /// shown by a background app it opens *behind* everything, and because the
+    /// flow is modal every click elsewhere just beeps — an invisible dialog
+    /// holding the app hostage. Promote and activate before Sparkle presents
+    /// anything, so its window has somewhere to come to the front of.
+    private func comeToFront() {
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: SPUUpdaterDelegate
@@ -97,6 +112,37 @@ final class UpdaterController: NSObject, ObservableObject, SPUUpdaterDelegate {
         // still works and reports properly when the user asks explicitly.
         Task { @MainActor in
             if self.status == .checking { self.status = .unknown }
+        }
+    }
+}
+
+
+// MARK: - Gentle reminders
+//
+// Sparkle warns that a background app scheduling its own checks "does not
+// implement gentle reminders", and it is right: left alone it either pops a
+// window the user never asked for or, for an agent, one they cannot see. Haze
+// already announces an available update in its own UI — the menu-bar footer and
+// the About page — so scheduled finds are handled there, and Sparkle only takes
+// the screen when the user actually asked for it.
+extension UpdaterController: SPUStandardUserDriverDelegate {
+    nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    /// A scheduled find is ours to show: the badge appears, nothing interrupts.
+    nonisolated func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        false
+    }
+
+    /// When Sparkle does present — because the user asked — make sure there is a
+    /// frontmost app for it to present into.
+    nonisolated func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
+    ) {
+        Task { @MainActor in
+            self.status = .available(version: update.displayVersionString)
+            if state.userInitiated { self.comeToFront() }
         }
     }
 }
