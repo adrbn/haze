@@ -89,10 +89,21 @@ float sg_hash13(float3 p3) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+// Soft knee on the noise peaks: |n| <= 0.6 untouched, above that eased toward
+// 0.8 (C1-continuous). The highest bulges stop just short of the camera, where
+// their fold edges read as hard lines instead of soft blur.
+float sg_softPeak(float n) {
+    const float k = 0.6;
+    float a = abs(n);
+    if (a <= k) { return n; }
+    float x = min((a - k) / (1.0 - k), 1.0);
+    return sign(n) * (k + (1.0 - k) * 0.5 * (1.0 - (1.0 - x) * (1.0 - x)));
+}
+
 // Surface displacement (along the plane normal / Z in local space).
 float sg_displace(float2 p, constant SGUniforms &u) {
     float t = u.time * u.speed;
-    float n = snoise(float3(p * u.density + float2(0.0, t * 0.3), t * 0.5));
+    float n = sg_softPeak(snoise(float3(p * u.density + float2(0.0, t * 0.3), t * 0.5)));
     float d = n * u.strength * 0.1;
     if (u.type == 1) { // waterPlane ripples
         d += (sin(p.x * u.frequency + t) * 0.5 + cos(p.y * u.frequency * 0.8 - t) * 0.5) * u.amplitude * 0.06;
