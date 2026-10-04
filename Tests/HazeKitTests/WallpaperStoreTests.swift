@@ -7,6 +7,7 @@ import XCTest
 /// menu bar draw its pale legibility backdrop over a dark wallpaper.
 final class WallpaperStoreTests: XCTestCase {
     private let posters = URL(fileURLWithPath: "/Users/test/Library/Application Support/Haze/Posters", isDirectory: true)
+    private let media = URL(fileURLWithPath: "/Users/test/Library/Application Support/Haze/Media", isDirectory: true)
     private var current: URL { posters.appendingPathComponent("NEW-abc.jpg") }
     private var stale: URL { posters.appendingPathComponent("OLD-xyz.jpg") }
     private let userPicture = URL(fileURLWithPath: "/Users/test/Pictures/church.jpg")
@@ -58,7 +59,7 @@ final class WallpaperStoreTests: XCTestCase {
     }
 
     private func heal(_ root: Any) -> WallpaperStore.HealOutcome {
-        WallpaperStore.heal(root, posterURL: current, posterDirectory: posters)
+        WallpaperStore.heal(root, posterURL: current, ownedDirectories: [posters, media])
     }
 
     // MARK: Tests
@@ -77,6 +78,18 @@ final class WallpaperStoreTests: XCTestCase {
 
     /// Pre-existing behaviour: a Space whose desktop is a colour (or any non-image
     /// choice) can't be reached by `setDesktopImageURL` at all.
+    /// Image / GIF / video items are set as the desktop picture straight from
+    /// Haze's Media folder, not via a poster — those Spaces are ours too.
+    func testRewritesStaleHazeMediaFile() {
+        let gif = media.appendingPathComponent("25BB.gif")
+        let root = store(desktops: ["a": imageContent(current), "b": imageContent(gif)])
+        guard case let .healed(healed, desktops) = heal(root) else {
+            return XCTFail("a Space left on an old Haze media file must be healed")
+        }
+        XCTAssertEqual(desktops, 1)
+        XCTAssertEqual(desktopURL(healed, space: "b"), current)
+    }
+
     func testRewritesNonImageDesktop() {
         let root = store(desktops: ["a": imageContent(current), "b": colorContent()])
         guard case let .healed(healed, desktops) = heal(root) else {
@@ -148,10 +161,10 @@ final class WallpaperStoreTests: XCTestCase {
     }
 
     func testPosterDirectoryMembershipIsExact() {
-        XCTAssertTrue(WallpaperStore.isPoster(current, in: posters))
-        XCTAssertFalse(WallpaperStore.isPoster(userPicture, in: posters))
+        XCTAssertTrue(WallpaperStore.isOwned(current, in: posters))
+        XCTAssertFalse(WallpaperStore.isOwned(userPicture, in: posters))
         // A nested path that merely starts with the posters path is not a poster.
         let nested = posters.appendingPathComponent("sub/deep.jpg")
-        XCTAssertFalse(WallpaperStore.isPoster(nested, in: posters))
+        XCTAssertFalse(WallpaperStore.isOwned(nested, in: posters))
     }
 }

@@ -35,11 +35,13 @@ public enum WallpaperStore {
     /// Point every desktop Haze owns at `posterURL`, reusing the entry
     /// `setDesktopImageURL` just wrote as the template so the format matches
     /// Apple's byte for byte.
-    public static func heal(_ root: Any, posterURL: URL, posterDirectory: URL) -> HealOutcome {
+    /// `ownedDirectories`: Haze's Posters and Media folders — a desktop picture
+    /// sitting directly in one of them was set by Haze.
+    public static func heal(_ root: Any, posterURL: URL, ownedDirectories: [URL]) -> HealOutcome {
         guard let template = templateContent(root, posterURL: posterURL) else { return .notReady }
         var healed = 0
         let rewritten = rewriteDesktops(root, template: template, posterURL: posterURL,
-                                        posterDirectory: posterDirectory, healed: &healed)
+                                        ownedDirectories: ownedDirectories, healed: &healed)
         return healed == 0 ? .upToDate : .healed(root: rewritten, desktops: healed)
     }
 
@@ -51,19 +53,20 @@ public enum WallpaperStore {
     ///   `setDesktopImageURL` cannot reach those at all; or
     /// * an image choice still pointing at one of **our own older posters** — the
     ///   common case, left behind on every Space the user wasn't looking at when
-    ///   they picked a new wallpaper.
+    ///   they picked a new wallpaper — or at a file in our Media folder (image,
+    ///   GIF and video items are set from there directly, without a poster).
     ///
     /// Anything else is a picture the user chose, and is never touched.
-    static func needsRewrite(_ content: [String: Any], posterURL: URL, posterDirectory: URL) -> Bool {
+    static func needsRewrite(_ content: [String: Any], posterURL: URL, ownedDirectories: [URL]) -> Bool {
         guard provider(content) == imageProvider else { return true }
         guard let url = imageURL(content), url != posterURL.standardizedFileURL else { return false }
-        return isPoster(url, in: posterDirectory)
+        return ownedDirectories.contains { isOwned(url, in: $0) }
     }
 
-    /// A file sitting directly in our posters folder. Deliberately an exact parent
+    /// A file sitting directly in one of our folders. Deliberately an exact parent
     /// match rather than a path prefix, so an unrelated file in a lookalike
     /// subfolder is never mistaken for ours.
-    static func isPoster(_ url: URL, in directory: URL) -> Bool {
+    static func isOwned(_ url: URL, in directory: URL) -> Bool {
         url.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path
     }
 
@@ -72,25 +75,25 @@ public enum WallpaperStore {
     /// Rebuild the tree, replacing the `Content` of every desktop that needs it.
     /// `Idle` (screen saver) entries live alongside desktops and are left alone.
     private static func rewriteDesktops(_ node: Any, template: [String: Any], posterURL: URL,
-                                        posterDirectory: URL, healed: inout Int) -> Any {
+                                        ownedDirectories: [URL], healed: inout Int) -> Any {
         if var dict = node as? [String: Any] {
             for (key, value) in dict {
                 if key == "Desktop", var desktop = value as? [String: Any],
                    let content = desktop["Content"] as? [String: Any],
-                   needsRewrite(content, posterURL: posterURL, posterDirectory: posterDirectory) {
+                   needsRewrite(content, posterURL: posterURL, ownedDirectories: ownedDirectories) {
                     desktop["Content"] = template
                     dict[key] = desktop
                     healed += 1
                 } else {
                     dict[key] = rewriteDesktops(value, template: template, posterURL: posterURL,
-                                                posterDirectory: posterDirectory, healed: &healed)
+                                                ownedDirectories: ownedDirectories, healed: &healed)
                 }
             }
             return dict
         } else if let array = node as? [Any] {
             return array.map {
                 rewriteDesktops($0, template: template, posterURL: posterURL,
-                                posterDirectory: posterDirectory, healed: &healed)
+                                ownedDirectories: ownedDirectories, healed: &healed)
             }
         }
         return node

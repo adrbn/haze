@@ -95,7 +95,7 @@ enum SystemWallpaper {
             else { continue }
 
             switch WallpaperStore.heal(root, posterURL: posterURL,
-                                       posterDirectory: ContentStore.postersURL) {
+                                       ownedDirectories: [ContentStore.postersURL, ContentStore.mediaURL]) {
             case .notReady:
                 continue   // setDesktopImageURL hasn't landed yet
             case .upToDate:
