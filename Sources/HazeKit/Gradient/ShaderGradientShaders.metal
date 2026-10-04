@@ -89,11 +89,11 @@ float sg_hash13(float3 p3) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// Soft knee on the noise peaks: |n| <= 0.6 untouched, above that eased toward
-// 0.8 (C1-continuous). The highest bulges stop just short of the camera, where
+// Soft knee on the noise peaks: |n| <= 0.3 untouched, above that eased toward
+// 0.65 (C1-continuous). The highest bulges stop short of the camera, where
 // their fold edges read as hard lines instead of soft blur.
 float sg_softPeak(float n) {
-    const float k = 0.6;
+    const float k = 0.3;   // cap = (1 + k) / 2
     float a = abs(n);
     if (a <= k) { return n; }
     float x = min((a - k) / (1.0 - k), 1.0);
