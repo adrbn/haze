@@ -48,15 +48,24 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
     private var externallyDriven = false
     private var isStopped = false
 
+    // 4x MSAA scene target, resolved into the drawable (or the blur input). The
+    // surface folds over itself where the noise is strong, and those silhouette
+    // edges stair-step badly without it — worse once the capped drawable is
+    // scaled up to the screen. Memoryless on Apple GPUs: no RAM cost.
+    private static let sampleCount = 4
+    private var msaaColor: MTLTexture?
+    private var msaaDepth: MTLTexture?
+
     // Gaussian blur post-process (only used when config.blur > 0).
     private var sceneTexture: MTLTexture?
-    private var sceneDepth: MTLTexture?
     private var blurredTexture: MTLTexture?
     private var blurKernel: MPSImageGaussianBlur?
     private var blurSigma: Float = -1
     private var compositePipeline: MTLRenderPipelineState?
 
-    private static let grid = 110   // plane subdivisions (smooth enough; ~2.1x fewer verts than 160 → lighter GPU)
+    // Plane subdivisions. Fold silhouettes follow the mesh edges, so too coarse a
+    // grid shows them as polylines. Vertex work is negligible next to fill.
+    private static let grid = 192
 
     public var view: NSView { mtkView }
 
@@ -74,9 +83,8 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         super.init()
 
         mtkView.colorPixelFormat = .bgra8Unorm
-        mtkView.depthStencilPixelFormat = .depth32Float
+        mtkView.depthStencilPixelFormat = .invalid   // depth lives in our MSAA target
         mtkView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-        mtkView.clearDepth = 1.0
         mtkView.framebufferOnly = true   // MPS writes an offscreen; the drawable is only a render target
         mtkView.wantsLayer = true
         // Non-opaque so the poster behind it shows during Space swipes / Mission
@@ -111,7 +119,6 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
 
     private func releaseBlurResources() {
         sceneTexture = nil
-        sceneDepth = nil
         blurredTexture = nil
         blurKernel = nil
         blurSigma = -1
@@ -152,7 +159,8 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             desc.vertexFunction = library.makeFunction(name: "sg_vertex")
             desc.fragmentFunction = library.makeFunction(name: "sg_fragment")
             desc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat
-            desc.depthAttachmentPixelFormat = mtkView.depthStencilPixelFormat
+            desc.depthAttachmentPixelFormat = .depth32Float
+            desc.rasterSampleCount = Self.sampleCount
             pipeline = try device.makeRenderPipelineState(descriptor: desc)
 
             let depthDesc = MTLDepthStencilDescriptor()
@@ -215,6 +223,8 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         isStopped = true
         mtkView.isPaused = true
         releaseBlurResources()
+        msaaColor = nil
+        msaaDepth = nil
     }
 
     public func setExternallyDriven(_ on: Bool) {
@@ -248,22 +258,14 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         var uniforms = makeUniforms(time: elapsed, drawableSize: view.drawableSize)
 
         if config.blur > 0,
-           let scene = sceneTextures(size: view.drawableSize),
+           let scene = sceneTexture(size: view.drawableSize),
            let blurred = ensureBlurred(size: view.drawableSize),
-           let compositePipeline {
+           let compositePipeline,
+           let scenePass = msaaPass(resolvingInto: scene, clearColor: view.clearColor) {
             uniforms.grain = 0   // grain is added OVER the blur in the composite pass
 
             // Pass 1 — render the gradient (grain-free) into an offscreen texture.
             let sigma = max(Float(config.blur) * 36.0, 0.5)
-            let scenePass = MTLRenderPassDescriptor()
-            scenePass.colorAttachments[0].texture = scene.color
-            scenePass.colorAttachments[0].loadAction = .clear
-            scenePass.colorAttachments[0].clearColor = view.clearColor
-            scenePass.colorAttachments[0].storeAction = .store
-            scenePass.depthAttachment.texture = scene.depth
-            scenePass.depthAttachment.loadAction = .clear
-            scenePass.depthAttachment.clearDepth = 1.0
-            scenePass.depthAttachment.storeAction = .dontCare
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: scenePass) else {
                 commandBuffer.commit(); return
             }
@@ -277,7 +279,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
                 blurKernel = kernel
                 blurSigma = sigma
             }
-            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene.color, destinationTexture: blurred)
+            blurKernel?.encode(commandBuffer: commandBuffer, sourceTexture: scene, destinationTexture: blurred)
 
             // Pass 3 — composite blurred -> drawable, adding grain on top.
             let drawPass = MTLRenderPassDescriptor()
@@ -298,7 +300,7 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
             commandBuffer.present(drawable)
             commandBuffer.commit()
         } else {
-            guard let passDescriptor = view.currentRenderPassDescriptor,
+            guard let passDescriptor = msaaPass(resolvingInto: drawable.texture, clearColor: view.clearColor),
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
                 commandBuffer.commit()
                 return
@@ -341,21 +343,53 @@ public final class ShaderGradientRenderer: NSObject, WallpaperRenderer, MTKViewD
         encoder.endEncoding()
     }
 
-    /// Offscreen colour + depth textures matching the drawable size (recreated on resize).
-    private func sceneTextures(size: CGSize) -> (color: MTLTexture, depth: MTLTexture)? {
+    /// A pass that draws into the 4x MSAA target and resolves into `target`.
+    private func msaaPass(resolvingInto target: MTLTexture, clearColor: MTLClearColor) -> MTLRenderPassDescriptor? {
+        guard let msaa = msaaTargets(width: target.width, height: target.height) else { return nil }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = msaa.color
+        pass.colorAttachments[0].resolveTexture = target
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].clearColor = clearColor
+        pass.colorAttachments[0].storeAction = .multisampleResolve
+        pass.depthAttachment.texture = msaa.depth
+        pass.depthAttachment.loadAction = .clear
+        pass.depthAttachment.clearDepth = 1.0
+        pass.depthAttachment.storeAction = .dontCare
+        return pass
+    }
+
+    /// Multisampled colour + depth (recreated on resize). Never stored, so on
+    /// Apple GPUs they live only in tile memory.
+    private func msaaTargets(width w: Int, height h: Int) -> (color: MTLTexture, depth: MTLTexture)? {
+        guard w > 0, h > 0 else { return nil }
+        if let c = msaaColor, let d = msaaDepth, c.width == w, c.height == h { return (c, d) }
+        let storage: MTLStorageMode = device.supportsFamily(.apple1) ? .memoryless : .private
+        func make(_ format: MTLPixelFormat) -> MTLTexture? {
+            let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: w, height: h, mipmapped: false)
+            desc.textureType = .type2DMultisample
+            desc.sampleCount = Self.sampleCount
+            desc.usage = [.renderTarget]
+            desc.storageMode = storage
+            return device.makeTexture(descriptor: desc)
+        }
+        guard let c = make(mtkView.colorPixelFormat), let d = make(.depth32Float) else { return nil }
+        msaaColor = c
+        msaaDepth = d
+        return (c, d)
+    }
+
+    /// Offscreen colour texture matching the drawable size (recreated on resize):
+    /// the MSAA resolve target the blur reads from.
+    private func sceneTexture(size: CGSize) -> MTLTexture? {
         let w = Int(size.width), h = Int(size.height)
         guard w > 0, h > 0 else { return nil }
-        if let c = sceneTexture, let d = sceneDepth, c.width == w, c.height == h { return (c, d) }
+        if let c = sceneTexture, c.width == w, c.height == h { return c }
         let cdesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: mtkView.colorPixelFormat, width: w, height: h, mipmapped: false)
         cdesc.usage = [.renderTarget, .shaderRead]
         cdesc.storageMode = .private
-        let ddesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float, width: w, height: h, mipmapped: false)
-        ddesc.usage = [.renderTarget]
-        ddesc.storageMode = .private
-        guard let c = device.makeTexture(descriptor: cdesc), let d = device.makeTexture(descriptor: ddesc) else { return nil }
-        sceneTexture = c
-        sceneDepth = d
-        return (c, d)
+        sceneTexture = device.makeTexture(descriptor: cdesc)
+        return sceneTexture
     }
 
     private func makeUniforms(time: Float, drawableSize: CGSize) -> SGUniforms {
