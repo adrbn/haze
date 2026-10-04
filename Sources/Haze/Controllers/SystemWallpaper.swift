@@ -60,104 +60,64 @@ enum SystemWallpaper {
                 Log.app.error("Failed to set desktop picture: \(error.localizedDescription, privacy: .public)")
             }
         }
-        // The supported call above can't override a Space whose desktop the user
-        // set to a *colour* (or other non-image choice) in System Settings — that
-        // Space, and the lock screen which mirrors it, keep the old background.
-        // Heal those by rewriting the wallpaper store directly (off the main thread).
+        // That supported call only reaches the Space that happens to be active, and
+        // can't touch a Space whose desktop the user set to a *colour* at all. Heal
+        // the rest by rewriting the wallpaper store directly (off the main thread).
         DispatchQueue.global(qos: .utility).async { reconcileWallpaperStore(posterURL: url) }
     }
 
-    // MARK: - Wallpaper store self-heal (macOS 26 Tahoe / Sonoma+)
+    // MARK: - Wallpaper store self-heal (macOS Sonoma+)
 
-    /// On Sonoma+ the wallpaper lives in `com.apple.wallpaper`'s per-Space
-    /// `Index.plist`. `setDesktopImageURL` updates image Spaces but leaves a Space
-    /// whose user explicitly chose a *colour/video* untouched (the lock screen,
-    /// which has no entry of its own, then mirrors that stale choice). Rewrite any
-    /// such non-image desktop to our poster — reusing the exact image entry that
-    /// `setDesktopImageURL` just wrote as a template — then reload the agent. Only
-    /// reloads when something actually changed, so normal switches don't flash.
-    private static let imageProvider = "com.apple.wallpaper.choice.image"
+    /// How long to keep looking for the entry `setDesktopImageURL` writes. It is an
+    /// async hop into WallpaperAgent, so the store can be a beat behind us; without
+    /// the retry the heal silently skipped that switch entirely and every other
+    /// Space stayed on the previous poster.
+    private static let healAttempts = 6
+    private static let healRetryDelay: TimeInterval = 0.25
 
+    /// Point every desktop Haze owns at the new poster, then reload the agent so it
+    /// re-reads the store.
+    ///
+    /// This is what keeps the menu bar honest. macOS decides the menu bar's
+    /// light/dark treatment — and whether to draw its pale legibility backdrop
+    /// across the top of the screen — from the *current Space's* desktop picture,
+    /// never from our live wallpaper window. `setDesktopImageURL` only writes the
+    /// active Space, so every Space the user wasn't looking at kept whichever
+    /// poster was current the last time it was frontmost; landing on one of those
+    /// with a bright old poster painted a pale band over a dark wallpaper, until
+    /// the preset was re-picked while standing on that exact Space.
     nonisolated private static func reconcileWallpaperStore(posterURL: URL) {
-        let store = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/com.apple.wallpaper/Store/Index.plist")
-        guard let data = try? Data(contentsOf: store),
-              let root = try? PropertyListSerialization.propertyList(from: data, format: nil),
-              let template = findTemplateContent(root, posterURL: posterURL) else { return }
+        let store = WallpaperStore.indexURL
+        for attempt in 0..<healAttempts {
+            if attempt > 0 { Thread.sleep(forTimeInterval: healRetryDelay) }
+            guard let data = try? Data(contentsOf: store),
+                  let root = try? PropertyListSerialization.propertyList(from: data, format: nil)
+            else { continue }
 
-        var changed = false
-        let healed = rewriteNonImageDesktops(root, template: template, changed: &changed)
-        guard changed,
-              let out = try? PropertyListSerialization.data(fromPropertyList: healed, format: .binary, options: 0)
+            switch WallpaperStore.heal(root, posterURL: posterURL,
+                                       posterDirectory: ContentStore.postersURL) {
+            case .notReady:
+                continue   // setDesktopImageURL hasn't landed yet
+            case .upToDate:
+                return     // nothing to write, so no agent reload and no flash
+            case let .healed(healed, desktops):
+                write(healed, to: store, desktops: desktops)
+                return
+            }
+        }
+        Log.app.error("Wallpaper store never picked up the new poster — other Spaces keep the old one")
+    }
+
+    nonisolated private static func write(_ root: Any, to store: URL, desktops: Int) {
+        guard let out = try? PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
         else { return }
         do {
-            try out.write(to: store)
+            try out.write(to: store, options: .atomic)
             reloadWallpaperAgent()
-            Log.app.info("Healed non-image desktop Space(s) to match the wallpaper poster")
+            Log.app.info("Pointed \(desktops, privacy: .public) Space desktop(s) at the current poster")
         } catch {
             Log.app.error("Failed to write wallpaper store: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    /// The `Content` of the first image desktop whose configuration points at
-    /// `posterURL` — i.e. the one `setDesktopImageURL` just created. Reused as the
-    /// template so we match Apple's exact (binary-plist) format instead of building it.
-    nonisolated private static func findTemplateContent(_ node: Any, posterURL: URL) -> [String: Any]? {
-        if let dict = node as? [String: Any] {
-            if let desktop = dict["Desktop"] as? [String: Any],
-               let content = desktop["Content"] as? [String: Any],
-               contentImageURL(content) == posterURL.standardizedFileURL {
-                return content
-            }
-            for value in dict.values {
-                if let found = findTemplateContent(value, posterURL: posterURL) { return found }
-            }
-        } else if let array = node as? [Any] {
-            for value in array {
-                if let found = findTemplateContent(value, posterURL: posterURL) { return found }
-            }
-        }
-        return nil
-    }
-
-    /// Rebuild the tree, replacing every `Desktop` whose choice is *not* an image
-    /// with `template`. Leaves image desktops (handled by `setDesktopImageURL`) and
-    /// all `Idle`/screen-saver entries alone.
-    nonisolated private static func rewriteNonImageDesktops(_ node: Any, template: [String: Any], changed: inout Bool) -> Any {
-        if var dict = node as? [String: Any] {
-            for (key, value) in dict {
-                if key == "Desktop", var desktop = value as? [String: Any],
-                   let content = desktop["Content"] as? [String: Any],
-                   contentProvider(content) != imageProvider {
-                    desktop["Content"] = template
-                    dict[key] = desktop
-                    changed = true
-                } else {
-                    dict[key] = rewriteNonImageDesktops(value, template: template, changed: &changed)
-                }
-            }
-            return dict
-        } else if let array = node as? [Any] {
-            return array.map { rewriteNonImageDesktops($0, template: template, changed: &changed) }
-        }
-        return node
-    }
-
-    nonisolated private static func contentProvider(_ content: [String: Any]) -> String? {
-        (content["Choices"] as? [Any])?.first.flatMap { ($0 as? [String: Any])?["Provider"] as? String }
-    }
-
-    /// Decode a desktop `Content`'s image configuration (a nested binary plist) to
-    /// its file URL, if it is an image choice.
-    nonisolated private static func contentImageURL(_ content: [String: Any]) -> URL? {
-        guard contentProvider(content) == imageProvider,
-              let choice = (content["Choices"] as? [Any])?.first as? [String: Any],
-              let cfgData = choice["Configuration"] as? Data,
-              let cfg = try? PropertyListSerialization.propertyList(from: cfgData, format: nil) as? [String: Any],
-              let urlDict = cfg["url"] as? [String: Any],
-              let relative = urlDict["relative"] as? String,
-              let url = URL(string: relative) else { return nil }
-        return url.standardizedFileURL
     }
 
     /// Reload only the wallpaper agent so it re-reads the store. We deliberately do
@@ -182,7 +142,7 @@ enum SystemWallpaper {
 
     /// Returns a file URL suitable as a desktop picture. File-backed items point
     /// straight at their media (or a video poster frame); gradients render a
-    /// matching still from their colours.
+    /// matching still through their own shaders.
     private static func makePoster(for item: ContentItem) -> URL? {
         switch item.type {
         case .image, .animatedImage:
@@ -190,9 +150,13 @@ enum SystemWallpaper {
         case .video:
             return videoPoster(for: item)
         case .gradient:
-            return gradientPoster(id: item.id, colors: item.gradient?.colors ?? [])
+            guard let config = item.gradient else { return nil }
+            return gradientPoster(id: item.id, signature: GradientSnapshot.signature(of: config),
+                                  colors: config.colors) { GradientSnapshot.image(config: config, size: $0) }
         case .shaderGradient:
-            return gradientPoster(id: item.id, colors: item.shaderGradient?.colors ?? [])
+            guard let config = item.shaderGradient else { return nil }
+            return gradientPoster(id: item.id, signature: GradientSnapshot.signature(of: config),
+                                  colors: config.colors) { GradientSnapshot.image(config: config, size: $0) }
         }
     }
 
@@ -206,9 +170,22 @@ enum SystemWallpaper {
         return writeImage(NSBitmapImageRep(cgImage: cg), id: item.id, signature: item.relativePath ?? "")
     }
 
-    private static func gradientPoster(id: UUID, colors: [RGBAColor]) -> URL? {
-        let nsColors = posterColors(colors)
+    /// Render the poster with the wallpaper's own shaders, so the still macOS reads
+    /// to pick the menu bar's treatment is the image the user is actually looking
+    /// at. Falls back to a flat colour sweep if Metal is unavailable — a poster
+    /// that is roughly right beats no desktop picture at all.
+    private static func gradientPoster(id: UUID, signature: String, colors: [RGBAColor],
+                                       render: (NSSize) -> CGImage?) -> URL? {
         let size = posterSize()
+        if let image = render(size) {
+            return writeImage(NSBitmapImageRep(cgImage: image), id: id, signature: signature)
+        }
+        Log.app.error("Poster render unavailable — falling back to a flat colour sweep")
+        return sweepPoster(id: id, signature: signature, colors: colors, size: size)
+    }
+
+    private static func sweepPoster(id: UUID, signature: String, colors: [RGBAColor], size: NSSize) -> URL? {
+        let nsColors = posterColors(colors)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
@@ -222,7 +199,6 @@ enum SystemWallpaper {
         NSGradient(colors: nsColors)?.draw(in: rect, angle: -45)   // diagonal sweep, like the swatches
         ctx.flushGraphics()
         NSGraphicsContext.restoreGraphicsState()
-        let signature = colors.map { "\($0.r),\($0.g),\($0.b)" }.joined(separator: "|")
         return writeImage(rep, id: id, signature: signature)
     }
 
@@ -260,7 +236,7 @@ enum SystemWallpaper {
         if let stale = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
             for url in stale where url.lastPathComponent.hasPrefix(prefix) { try? fm.removeItem(at: url) }
         }
-        let url = dir.appendingPathComponent("\(prefix)-\(stableHash(signature)).jpg")
+        let url = dir.appendingPathComponent("\(prefix)-\(ContentSignature.hash(signature)).jpg")
         do {
             try data.write(to: url, options: .atomic)
             return url
@@ -268,12 +244,5 @@ enum SystemWallpaper {
             Log.app.error("Failed to write poster: \(error.localizedDescription, privacy: .public)")
             return nil
         }
-    }
-
-    /// Deterministic djb2 hash (String.hashValue is randomised per run).
-    private static func stableHash(_ string: String) -> String {
-        var hash: UInt64 = 5381
-        for byte in string.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
-        return String(hash, radix: 36)
     }
 }
