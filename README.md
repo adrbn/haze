@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/demo.webp" width="560" alt="Haze on a Mac: a live gradient wallpaper behind the lock screen, then behind the desktop">
-
 <img src="assets/icon.png" width="56" alt="Haze app icon">
 
 # Haze
 
 **Live wallpapers, a matching screensaver, and animated Metal gradients for macOS.**<br>
 Native, light on your Mac, free and open source.
+
+<img src="assets/demo.webp" width="560" alt="Haze on a Mac: a live gradient wallpaper behind the lock screen, then behind the desktop">
 
 <a href="https://github.com/adrbn/haze/releases/latest"><img src="assets/btn-download.svg" alt="Download" height="40"></a>&nbsp;
 <a href="#presets"><img src="assets/btn-presets.svg" alt="Presets" height="40"></a>&nbsp;
