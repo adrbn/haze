@@ -7,7 +7,7 @@ Native, light on your Mac, free and open source.
 
 <br>
 
-<img src="assets/demo.webp" width="440" alt="Haze on a Mac: a live gradient wallpaper behind the lock screen, then behind the desktop">
+<p><img src="assets/demo.webp" width="440" alt="Haze on a Mac: a live gradient wallpaper behind the lock screen, then behind the desktop"></p>
 
 <br>
 
