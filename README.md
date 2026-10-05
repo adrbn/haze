@@ -1,17 +1,27 @@
 <div align="center">
 
-<img src="assets/icon.png" width="128" alt="Haze app icon">
+<img src="assets/demo.webp" width="560" alt="Haze on a Mac: a live gradient wallpaper behind the lock screen, then behind the desktop">
 
-# haze
+<img src="assets/icon.png" width="56" alt="Haze app icon">
 
-**Live wallpapers, a matching screensaver, and animated Metal gradients for macOS — native, lightweight, free.**
+# Haze
 
-Liquid‑Glass UI · sips resources · open source
+**Live wallpapers, a matching screensaver, and animated Metal gradients for macOS.**<br>
+Native, light on your Mac, free and open source.
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
-![Platform](https://img.shields.io/badge/macOS-15%2B-black?logo=apple)
-![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-555)
-![Swift](https://img.shields.io/badge/Swift-5-orange?logo=swift)
+<a href="https://github.com/adrbn/haze/releases/latest"><img src="assets/btn-download.svg" alt="Download" height="40"></a>&nbsp;
+<a href="#presets"><img src="assets/btn-presets.svg" alt="Presets" height="40"></a>&nbsp;
+<a href="#build--run"><img src="assets/btn-build.svg" alt="Build from source" height="40"></a>&nbsp;
+<a href="#how-it-works"><img src="assets/btn-how.svg" alt="How it works" height="40"></a>
+
+<br>
+
+[![macOS 15+](https://img.shields.io/badge/macOS-15%2B-FF5005?style=flat-square&labelColor=1A0E0A&logo=apple&logoColor=white)](#requirements)
+[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-FF5005?style=flat-square&labelColor=1A0E0A)](#requirements)
+[![Metal](https://img.shields.io/badge/gradients-Metal-FF5005?style=flat-square&labelColor=1A0E0A)](#how-it-works)
+[![Notarized](https://img.shields.io/badge/Developer%20ID-notarized-FF5005?style=flat-square&labelColor=1A0E0A)](#download)
+[![Latest release](https://img.shields.io/github/v/release/adrbn/haze?style=flat-square&labelColor=1A0E0A&color=FF5005&label=release)](https://github.com/adrbn/haze/releases/latest)
+[![License GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-FF5005?style=flat-square&labelColor=1A0E0A)](LICENSE)
 
 </div>
 
@@ -23,7 +33,7 @@ core, with aggressive power management so it stays out of the way and off your f
 
 The hero feature is the **gradient engine**: silky 2D gradients and **Fluid 3D**
 gradients (inspired by [shadergradient.co](https://shadergradient.co)) you can tune
-live — palette, speed, blur, grain — or pick from dozens of bundled presets.
+live — palette, speed, blur, grain — or pick from the 27 bundled [presets](#presets).
 
 > [!NOTE]
 > **What “while sleeping” really means.** When a Mac is *truly asleep* the display
@@ -31,28 +41,37 @@ live — palette, speed, blur, grain — or pick from dozens of bundled presets.
 > exist: the **live wallpaper** (and the lock screen, which macOS derives from it)
 > and the **screensaver** shown while the Mac is idle.
 
-## Screenshots
-
-<div align="center">
-
-https://github.com/user-attachments/assets/12d7a2cc-3ffc-4cae-bdaa-96a8dd3b8b67
-
-<img src="assets/library.png" width="820" alt="Haze — the wallpaper library, grouped by category">
-
-</div>
-
 ## Features
 
-- 🎞 **Live wallpapers** — looping video (H.264/HEVC, hardware‑decoded), animated GIFs, and stills.
-- 🌈 **Gradient engine** — animated **Classic (2D)** and **Fluid (3D)** Metal gradients with an editable palette, speed, blur, and grain. Dozens of presets bundled.
-- 💤 **Matching screensaver** — a real `.saver` plugin that reuses the same renderers, so your screensaver mirrors your live wallpaper automatically.
-- 🖼 **Match macOS wallpaper** — optionally sets a still of your wallpaper as the system desktop picture, so Mission Control, the lock screen, and login match the live one.
-- 🪶 **Lightweight by design** — pauses rendering when the desktop is fully covered, the display sleeps, the screen locks, or (optionally) on battery / Low Power Mode. Render resolution and frame rate are capped — ~0% CPU when occluded.
-- 🧊 **Native Liquid Glass UI** — real Liquid Glass on macOS 26, graceful `.ultraThinMaterial` fallback on 15.
-- ✨ **Menu‑bar picker** — no Dock clutter. A visual panel with what's playing pinned at the top, your recent wallpapers one click away, and the rest as a searchable, filterable thumbnail grid — plus pause and a speed slider.
-- 🚀 **Launch at login** — optional, one toggle.
-- 🔄 **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
-- 🔏 **Signed and notarized** — Developer ID, hardened runtime, Apple‑notarized with the ticket stapled, so it opens on a double‑click.
+<table>
+  <tr>
+    <td align="center" valign="top" width="33%"><img src="assets/card-wallpaper.svg" alt="A live gradient wallpaper behind the menu bar and the Dock" width="100%"><br><b>Live wallpapers</b><br><sub>Looping video (H.264 and HEVC, hardware‑decoded), animated GIFs, stills and gradients, on the desktop behind your windows.</sub></td>
+    <td align="center" valign="top" width="33%"><img src="assets/card-gradients.svg" alt="The gradient editor: palette, speed, blur and grain over a live gradient" width="100%"><br><b>Gradient engine</b><br><sub>Animated Classic (2D) and Fluid (3D) Metal gradients. Change the palette, speed, blur and grain live, or start from a preset.</sub></td>
+    <td align="center" valign="top" width="33%"><img src="assets/card-screensaver.svg" alt="The same gradient as the wallpaper, then as the screensaver" width="100%"><br><b>A matching screensaver</b><br><sub>A real <code>.saver</code> plugin on the same renderers. Leave it on “Match wallpaper” and it follows your live wallpaper.</sub></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><img src="assets/card-light.svg" alt="A window covers the desktop and the gradient stops rendering" width="100%"><br><b>Light by design</b><br><sub>Pauses when the desktop is fully covered, the display sleeps, the screen locks, or (optionally) on battery and Low Power Mode. Resolution and frame rate are capped: ~0% CPU when covered.</sub></td>
+    <td align="center" valign="top"><img src="assets/card-picker.svg" alt="The menu-bar picker: pick a preset and the desktop follows" width="100%"><br><b>Menu‑bar picker</b><br><sub>No Dock icon. What’s playing pinned at the top, recent wallpapers one click away, the rest in a searchable, filterable grid, with pause and a speed slider.</sub></td>
+    <td align="center" valign="top"><img src="assets/card-lock.svg" alt="The lock screen, on a still of the live wallpaper" width="100%"><br><b>Matches macOS</b><br><sub>Optionally sets a still of your wallpaper as the system desktop picture, so Mission Control, the lock screen and login match the live one.</sub></td>
+  </tr>
+</table>
+
+And around it:
+
+- **Native Liquid Glass UI** — real Liquid Glass on macOS 26, graceful `.ultraThinMaterial` fallback on 15.
+- **Launch at login** — optional, one toggle.
+- **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
+- **Signed and notarized** — Developer ID, hardened runtime, Apple‑notarized with the ticket stapled, so it opens on a double‑click.
+
+## Presets
+
+<div align="center">
+<img src="assets/presets.svg" width="880" alt="The 27 gradient presets that ship with Haze: 19 Fluid 3D and 8 Classic 2D, each drawn in its own colours with its name">
+</div>
+
+Every preset that ships in the app, 19 Fluid 3D and 8 Classic 2D, in its real colours: the swatches
+are drawn from `Sources/HazeKit/Gradient/*Presets.swift` by [`assets/make_svgs.py`](assets/make_svgs.py),
+so they follow the code. In the app each one is a live Metal gradient you can tune.
 
 ## Download
 
