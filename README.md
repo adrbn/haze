@@ -120,7 +120,7 @@ make run          # generate the project, build, and launch
 # or step by step:
 make generate     # xcodegen → Haze.xcodeproj
 make build        # debug build
-make test         # run the HazeKit unit tests (64)
+make test         # run the HazeKit unit tests (101)
 make release      # optimized build
 ```
 
