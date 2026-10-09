@@ -268,6 +268,12 @@ struct MenuBarContent: View {
             FooterButton(title: "Open Haze…", systemImage: "macwindow") {
                 AppDelegate.shared?.showMainWindow()
             }
+            FooterButton(title: "Hide icon", systemImage: "eye.slash") {
+                var updated = model.settings
+                updated.showMenuBarIcon = false
+                model.updateSettings(updated)
+            }
+            .help("Hide Haze from the menu bar. Open Haze again from Applications or Spotlight to bring it back.")
             Spacer(minLength: 0)
             // An available update is announced where the app actually lives.
             // Buried in a window nobody opens, the news never arrives.
