@@ -305,9 +305,11 @@ final class AppModel: ObservableObject {
         let launchChanged = newSettings.launchAtLogin != settings.launchAtLogin
         let soundChanged = newSettings.videoSoundEnabled != settings.videoSoundEnabled
         let matchChanged = newSettings.matchSystemWallpaper != settings.matchSystemWallpaper
+        let iconChanged = newSettings.showMenuBarIcon != settings.showMenuBarIcon
         settings = newSettings
         wallpaper.updateSettings(newSettings)
         if launchChanged { LaunchAtLogin.setEnabled(newSettings.launchAtLogin) }
+        if iconChanged { AppDelegate.shared?.setMenuBarIconVisible(newSettings.showMenuBarIcon) }
         if soundChanged, let current = currentWallpaper, current.type == .video {
             wallpaper.apply(item: current, settings: settings)   // rebuild video with new mute state
         }

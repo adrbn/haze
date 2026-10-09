@@ -61,6 +61,10 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// it can be restored when the feature is turned off. `nil` until captured.
     public var savedSystemWallpaperPath: String?
 
+    /// Show the Haze glyph in the menu bar. When off, the app is reached by
+    /// opening it again (Finder, Spotlight), which brings up the main window.
+    public var showMenuBarIcon: Bool
+
     public init(version: Int = AppSettings.currentVersion,
                 wallpaperItemID: UUID? = nil,
                 screensaverItemID: UUID? = nil,
@@ -77,7 +81,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
                 navLayout: NavLayout = .sidebar,
                 barEdge: BarEdge = .top,
                 matchSystemWallpaper: Bool = true,
-                savedSystemWallpaperPath: String? = nil) {
+                savedSystemWallpaperPath: String? = nil,
+                showMenuBarIcon: Bool = true) {
         self.version = version
         self.wallpaperItemID = wallpaperItemID
         self.screensaverItemID = screensaverItemID
@@ -95,6 +100,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.barEdge = barEdge
         self.matchSystemWallpaper = matchSystemWallpaper
         self.savedSystemWallpaperPath = savedSystemWallpaperPath
+        self.showMenuBarIcon = showMenuBarIcon
     }
 
     public static let `default` = AppSettings()
@@ -120,5 +126,6 @@ public struct AppSettings: Codable, Sendable, Equatable {
         barEdge = try c.decodeIfPresent(BarEdge.self, forKey: .barEdge) ?? d.barEdge
         matchSystemWallpaper = try c.decodeIfPresent(Bool.self, forKey: .matchSystemWallpaper) ?? d.matchSystemWallpaper
         savedSystemWallpaperPath = try c.decodeIfPresent(String.self, forKey: .savedSystemWallpaperPath)
+        showMenuBarIcon = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? d.showMenuBarIcon
     }
 }

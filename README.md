@@ -62,6 +62,7 @@ And around it:
 
 - **Native Liquid Glass UI** — real Liquid Glass on macOS 26, graceful `.ultraThinMaterial` fallback on 15.
 - **Launch at login** — optional, one toggle.
+- **Hide the menu‑bar icon** — optional. Open Haze again from Applications or Spotlight to get the window back.
 - **In‑app auto‑updates** — checks daily (or on demand), shows the changelog, and installs in place (Sparkle, signed appcast).
 - **Signed and notarized** — Developer ID, hardened runtime, Apple‑notarized with the ticket stapled, so it opens on a double‑click.
 

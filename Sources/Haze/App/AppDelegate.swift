@@ -17,6 +17,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.bootstrap()
+        // Next turn of the run loop: SwiftUI has made its status item by then.
+        DispatchQueue.main.async { [self] in
+            setMenuBarIconVisible(model.settings.showMenuBarIcon)
+        }
+    }
+
+    /// Show or hide the menu-bar glyph.
+    ///
+    /// SwiftUI's own switch for this, `MenuBarExtra(isInserted:)`, is not used:
+    /// with it present, opening Haze again no longer produced the main window,
+    /// which is the only way back in once the glyph is gone. The status item
+    /// SwiftUI made is toggled directly instead, leaving the reopen flow alone.
+    func setMenuBarIconVisible(_ visible: Bool) {
+        menuBarItem = menuBarItem ?? Self.findMenuBarItem()
+        menuBarItem?.isVisible = visible
+    }
+
+    /// Kept once found, so showing the glyph again never depends on a hidden
+    /// item's window still being listed.
+    private var menuBarItem: NSStatusItem?
+
+    // ponytail: reaches SwiftUI's status item through its window with KVC, not
+    // public API. If a macOS release drops the key the glyph simply stays
+    // visible; own the NSStatusItem (and an NSPopover for the picker) then.
+    private static func findMenuBarItem() -> NSStatusItem? {
+        NSApp.windows.lazy
+            .filter { $0.className.contains("NSStatusBarWindow") && $0.responds(to: Selector(("statusItem"))) }
+            .compactMap { $0.value(forKey: "statusItem") as? NSStatusItem }
+            .first
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -44,6 +44,13 @@ struct SettingsView: View {
                     Toggle("Play video sound", isOn: boolBinding(\.videoSoundEnabled))
                 }
 
+                Section("Menu bar") {
+                    Toggle("Show Haze in the menu bar", isOn: boolBinding(\.showMenuBarIcon))
+                    Text("With the icon hidden, open Haze again from Applications or Spotlight to bring this window back.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Startup") {
                     Toggle("Launch Haze at login", isOn: boolBinding(\.launchAtLogin))
                 }

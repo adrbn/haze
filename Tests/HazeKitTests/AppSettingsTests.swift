@@ -31,6 +31,19 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertNil(decoded.wallpaperItemID)
     }
 
+    func testMenuBarIconShownByDefaultAndForSettingsSavedBeforeTheOption() throws {
+        XCTAssertTrue(AppSettings.default.showMenuBarIcon)
+        let json = #"{"version":1}"#.data(using: .utf8)!
+        XCTAssertTrue(try JSONStore.decoder.decode(AppSettings.self, from: json).showMenuBarIcon)
+    }
+
+    func testHiddenMenuBarIconSurvivesARoundTrip() throws {
+        var s = AppSettings.default
+        s.showMenuBarIcon = false
+        let decoded = try JSONStore.decoder.decode(AppSettings.self, from: JSONStore.encoder.encode(s))
+        XCTAssertFalse(decoded.showMenuBarIcon)
+    }
+
     func testEmptyObjectDecodes() throws {
         let json = "{}".data(using: .utf8)!
         XCTAssertNoThrow(try JSONStore.decoder.decode(AppSettings.self, from: json))
