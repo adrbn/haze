@@ -60,11 +60,14 @@ APP="build/Build/Products/Release/Haze.app"
 # ---------------------------------------------------------------- build
 step "Building a signed Release"
 rm -rf build
+# Sparkle's binary download asks the keychain for GitHub credentials it does
+# not need (Xcode 27.1); that prompt hangs an unattended build. netrc skips it.
 xcodebuild -project Haze.xcodeproj -scheme Haze -configuration Release -derivedDataPath build \
   MARKETING_VERSION="$SHORT" CURRENT_PROJECT_VERSION="$BUILD" \
   HAZE_CODE_SIGN_IDENTITY="$SIGN_ID" HAZE_DEVELOPMENT_TEAM="$TEAM_ID" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  -packageAuthorizationProvider netrc \
   build > "$OUT/build.log" 2>&1 || { tail -30 "$OUT/build.log"; die "Build failed — full log: $OUT/build.log"; }
 
 # Xcode signs the targets it builds, but not the code *inside* a binary package

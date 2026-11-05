@@ -17,9 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.bootstrap()
-        // Next turn of the run loop: SwiftUI has made its status item by then.
-        DispatchQueue.main.async { [self] in
-            setMenuBarIconVisible(model.settings.showMenuBarIcon)
+        // ponytail: fixed re-tries. Launched at login, Haze can come up before
+        // the menu bar has made its status item (seen: glyph left showing with
+        // the setting off); apply again as it settles. Observe the status bar
+        // instead if a slower login ever outlasts the last try.
+        for delay in [0.0, 1, 3, 10, 30] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+                setMenuBarIconVisible(model.settings.showMenuBarIcon)
+            }
         }
     }
 
