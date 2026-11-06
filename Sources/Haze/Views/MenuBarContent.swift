@@ -268,7 +268,11 @@ struct MenuBarContent: View {
             FooterButton(title: "Open Haze…", systemImage: "macwindow") {
                 AppDelegate.shared?.showMainWindow()
             }
-            FooterButton(title: "Hide icon", systemImage: "eye.slash") {
+            // Icon only: with four labels the footer outgrows the panel and
+            // every one of them gets cut.
+            FooterButton(title: "Hide icon", systemImage: "eye.slash", iconOnly: true) {
+                // The panel hangs from the glyph; it would stay up on its own.
+                NSApp.keyWindow?.close()
                 var updated = model.settings
                 updated.showMenuBarIcon = false
                 model.updateSettings(updated)
@@ -348,6 +352,7 @@ private struct FooterButton: View {
     let title: String
     let systemImage: String
     var highlighted = false
+    var iconOnly = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -355,7 +360,9 @@ private struct FooterButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
+            Group {
+                if iconOnly { Image(systemName: systemImage) } else { Label(title, systemImage: systemImage) }
+            }
                 .font(.system(size: 11, weight: highlighted ? .semibold : .medium))
                 .foregroundStyle(highlighted ? Color.accentColor : Color.primary)
                 .padding(.horizontal, 8)
@@ -367,5 +374,6 @@ private struct FooterButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .accessibilityLabel(title)
     }
 }
