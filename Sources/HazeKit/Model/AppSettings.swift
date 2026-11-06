@@ -62,7 +62,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var savedSystemWallpaperPath: String?
 
     /// Show the Haze glyph in the menu bar. When off, the app is reached by
-    /// opening it again (Finder, Spotlight), which brings up the main window.
+    /// opening it again (Finder, Spotlight), which also brings the glyph back.
     public var showMenuBarIcon: Bool
 
     public init(version: Int = AppSettings.currentVersion,

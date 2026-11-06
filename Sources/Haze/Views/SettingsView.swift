@@ -46,7 +46,7 @@ struct SettingsView: View {
 
                 Section("Menu bar") {
                     Toggle("Show Haze in the menu bar", isOn: boolBinding(\.showMenuBarIcon))
-                    Text("With the icon hidden, open Haze again from Applications or Spotlight to bring this window back.")
+                    Text("With the icon hidden, open Haze again from Applications or Spotlight to bring it back.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

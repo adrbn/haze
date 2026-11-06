@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.bootstrap()
+        // Opened by hand with the glyph hidden, Haze would show nothing at all.
+        if !launchedAtLogin { showMenuBarIconAgain() }
         // ponytail: fixed re-tries. Launched at login, Haze can come up before
         // the menu bar has made its status item (seen: glyph left showing with
         // the setting off); apply again as it settles. Observe the status bar
@@ -39,6 +41,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menuBarItem?.isVisible = visible
     }
 
+    /// Opening Haze by hand is how a hidden glyph comes back.
+    @MainActor private func showMenuBarIconAgain() {
+        guard !model.settings.showMenuBarIcon else { return }
+        var updated = model.settings
+        updated.showMenuBarIcon = true
+        model.updateSettings(updated)
+    }
+
+    private var launchedAtLogin: Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        return event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+    }
+
     /// Kept once found, so showing the glyph again never depends on a hidden
     /// item's window still being listed.
     private var menuBarItem: NSStatusItem?
@@ -58,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMenuBarIconAgain()
         showMainWindow()
         return true
     }
